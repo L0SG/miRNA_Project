@@ -1,0 +1,35 @@
+mireap start at Wed Jul 22 17:27:43 2015
+
+Parameters:
+  minimal miRNA length: 18
+  maximal miRNA length: 26
+  minimal miRNA(reference) length: 20
+  maximal miRNA(reference) length: 24
+  uniqueness of miRNA: 20
+  maximal energy: -18
+  minimal space: 5
+  maximal space: 35
+  minimal mature pair: 14
+  maximal mature bulge: 4
+  maximal duplex asymmetry: 5
+  flank sequence length: 10
+
+Load short tag file: smrna.fa
+  small RNAs [18 - 26 nt]
+  unique: 8165
+  total:  13490
+
+Load mapping file: map.txt
+  small RNAs mapped [18 - 26 nt]
+  unique: 8165
+  total:  13490
+
+Load reference file: ref.fa
+  total 1 entries
+
+miRNA discovery
+	nscaf1690:+ 38728 398(284) 16
+	nscaf1690:- 38958 426(289) 16
+
+mireap finish at Wed Jul 22 17:27:46 2015
+  31 miRNA genes are identified
