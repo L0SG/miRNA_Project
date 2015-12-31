@@ -27,21 +27,22 @@ output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
 
 # variable list
-NUM_THREADS = 4
+NUM_THREADS = 12
 MATURE_MIN_LEN = 18
 MATURE_MAX_LEN = 26
-MAX_SERIAL_MISMATCH = 3
-MAX_MULT_MISMATCH = 3
-MAX_SERIAL_BULGE = 3
-MAX_MULT_BULGE = 3
+MAX_SERIAL_MISMATCH = 2
+MAX_MULT_MISMATCH = 2
+MAX_SERIAL_BULGE = 2
+MAX_MULT_BULGE = 2
 MAX_MULTIPLE_LOCI = 20
-DISTANCE_THRESHOLD = 35
+DISTANCE_THRESHOLD = 20
 ARM_EXTEND_THRESHOLD = 10
 RNAFOLD_STEP = 2
 MIN_ABS_MFE = 18
 MIN_READ_COUNT_THRESHOLD = 2
 DUPLICATE_FILTER_THRESHOLD = 5
 DOMINANT_FACTOR = 1
+NON_CANONICAL_PREC_FACTOR = 0.1
 ##################################### main script start #####################################
 
 print("miRNA Discovery Project")
@@ -177,7 +178,7 @@ def precursor_generator(lines):
                 if i < 3:
                     count_sites += ref_count_list_pos[name_list_index][int(line_split[3])-i]
                     count_sites += ref_count_list_pos[name_list_index][int(line_split[3])+i]
-            if count_sites/count_region < DOMINANT_FACTOR or count/count_sites < DOMINANT_FACTOR/2:
+            if float(count_sites)/count_region < DOMINANT_FACTOR or float(count)/count_sites < DOMINANT_FACTOR/2.0:
                 qualified_flag = 0
 
         elif line_split[5] == "-":
@@ -198,7 +199,7 @@ def precursor_generator(lines):
                 if i < 3:
                     count_sites += ref_count_list_neg[name_list_index][int(line_split[4])-i]
                     count_sites += ref_count_list_neg[name_list_index][int(line_split[4])+i]
-            if count_sites/count_region < DOMINANT_FACTOR or count/count_sites < DOMINANT_FACTOR/2:
+            if float(count_sites)/count_region < DOMINANT_FACTOR or float(count)/count_sites < DOMINANT_FACTOR/2.0:
                 qualified_flag = 0
 
         if qualified_flag == 0:
@@ -366,12 +367,23 @@ while 1:
         break
     line_seq = output_precursor_collapsed.readline().strip()
     line_db = output_precursor_collapsed.readline().strip()
+
+    # Discard non-canonical (i.e. "hard to identify") precursor
+    # "Asymmetric" dot-bracket notation precursor : low accuracy, hard to identify star seq, and too many outputs
+    # if ")" portion is large in "left side", it's non-canonical
+    line_db_left = line_db[0:len(line_db)/2]
+    num_open = line_db_left.count("(")
+    num_close = line_db_left.count(")")
+    if float(num_close)/num_open > NON_CANONICAL_PREC_FACTOR:
+        continue
+    # find valid star sequence from putative precursors
     start_5p, end_5p, start_3p, end_3p = SeqModule.star_identifier_v2(line_db, MATURE_MIN_LEN, MATURE_MAX_LEN,
                                                                       MAX_SERIAL_MISMATCH, MAX_MULT_MISMATCH,
                                                                       MAX_SERIAL_BULGE, MAX_MULT_BULGE)
     if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
         continue
     result_count += 1
+    output_mature.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")
     output_mature.write(line_info+"\n"+line_seq+"\n"+line_db+"\n")
     output_mature.write('*'*start_5p+line_seq[start_5p:end_5p]+'*'*(len(line_seq)-end_5p)+"\n")
     output_mature.write('*'*start_3p+line_seq[start_3p:end_3p]+'*'*(len(line_seq)-end_3p)+"\n")
