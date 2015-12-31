@@ -7,7 +7,7 @@ import multiprocessing
 import os
 import operator
 
-here = os.path.dirname(os.path.dirname(__file__))
+here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
 path = os.path.join(here, subdir)
 if not os.path.exists(path):
@@ -19,9 +19,9 @@ smrna_file = open("smrna.fa", "r")  # smRNA library file
 
 # output file list
 output_temp = open(os.path.join(path, "temp"), "w+")
-output_map = open(os.path.join(path, "map"), "w+")
-output_count_pos = open(os.path.join(path, "count_pos"), "w+")
-output_count_neg = open(os.path.join(path, "count_neg"), "w+")
+output_map = open(os.path.join(path, "map"), "r+")
+output_count_pos = open(os.path.join(path, "count_pos"), "r+")
+output_count_neg = open(os.path.join(path, "count_neg"), "r+")
 output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
 output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
@@ -41,7 +41,7 @@ RNAFOLD_STEP = 2
 MIN_ABS_MFE = 18
 MIN_READ_COUNT_THRESHOLD = 2
 DUPLICATE_FILTER_THRESHOLD = 5
-
+DOMINANT_FACTOR = 1
 ##################################### main script start #####################################
 
 print("miRNA Discovery Project")
@@ -55,7 +55,7 @@ ref_count_list_neg = []
 for i in range(0, len(ref_seq_list)):
     ref_count_list_pos.append([0]*len(ref_seq_list[i]))
     ref_count_list_neg.append([0]*len(ref_seq_list[i]))
-
+"""
 # read smrna file and generate map file
 print("Generating map file from seq library...")
 
@@ -135,7 +135,7 @@ json.dump(ref_count_list_neg, output_count_neg)
 output_count_pos.seek(0, 0)
 output_count_neg.seek(0, 0)
 print("Generating Done")
-
+"""
 # Load previously Dumped count data
 ref_count_list_pos = json.load(output_count_pos)
 ref_count_list_neg = json.load(output_count_neg)
@@ -177,7 +177,7 @@ def precursor_generator(lines):
                 if i < 3:
                     count_sites += ref_count_list_pos[name_list_index][int(line_split[3])-i]
                     count_sites += ref_count_list_pos[name_list_index][int(line_split[3])+i]
-            if count_sites/count_region < 0.9 or count/count_sites < 0.5:
+            if count_sites/count_region < DOMINANT_FACTOR or count/count_sites < DOMINANT_FACTOR/2:
                 qualified_flag = 0
 
         elif line_split[5] == "-":
@@ -198,7 +198,7 @@ def precursor_generator(lines):
                 if i < 3:
                     count_sites += ref_count_list_neg[name_list_index][int(line_split[4])-i]
                     count_sites += ref_count_list_neg[name_list_index][int(line_split[4])+i]
-            if count_sites/count_region < 0.9 or count/count_sites < 0.5:
+            if count_sites/count_region < DOMINANT_FACTOR or count/count_sites < DOMINANT_FACTOR/2:
                 qualified_flag = 0
 
         if qualified_flag == 0:
