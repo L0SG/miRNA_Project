@@ -6,18 +6,37 @@ import json
 import multiprocessing
 import os
 import operator
-
+import sys
+import getopt
 here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
 path = os.path.join(here, subdir)
 if not os.path.exists(path):
     os.mkdir(path)
 
+# parse arguments
+try:
+    opts,args = getopt.getopt(sys.argv[1:],"r:i:o:t:m:M:sm:mm:sb:mb:ml:d:a:s:mfe:rc")
+except getopt.GetoptError as e:
+    print(str(e))
+    print("Usage")
+    sys.exit(2)
+
 # input file list
-ref_file = open("ref.fa", "r")      # Reference genome file
-smrna_file = open("smrna.fa", "r")  # smRNA library file
+for o, a in opts:
+    if o == '-r':
+        ref_file = open(a, "r")
+    else:
+        ref_file = open("ref.fa", "r")      # Reference genome file
+    if o == '-i':
+        smrna_file = open(a, "r")
+    else:
+        smrna_file = open("smrna.fa", "r")  # smRNA library file
 
 # output file list
+for o, a in opts:
+    if o == '-o':
+        path = a
 output_temp = open(os.path.join(path, "temp"), "w+")
 output_map = open(os.path.join(path, "map"), "w+")
 output_count_pos = open(os.path.join(path, "count_pos"), "w+")
@@ -43,6 +62,35 @@ MIN_READ_COUNT_THRESHOLD = 2
 DUPLICATE_FILTER_THRESHOLD = 5
 DOMINANT_FACTOR = 1
 NON_CANONICAL_PREC_FACTOR = 0.1
+for o, a in opts:
+    if o == '-t':
+        NUM_THREADS=a
+    elif o == '-m':
+        MATURE_MIN_LEN=a
+    elif o == '-M':
+        MATURE_MAX_LEN=a
+    elif o == '-sm':
+        MAX_SERIAL_MISMATCH=a
+    elif o == '-mm':
+        MAX_MULT_MISMATCH=a
+    elif o == '-sb':
+        MAX_SERIAL_BULGE=a
+    elif o == '-mb':
+        MAX_MULT_BULGE=a
+    elif o == '-ml':
+        MAX_MULTIPLE_LOCI=a
+    elif o == '-d':
+        DISTANCE_THRESHOLD=a
+    elif o == '-a':
+        ARM_EXTEND_THRESHOLD=a
+    elif o == '-s':
+        RNAFOLD_STEP=a
+    elif o == '-mfe':
+        MIN_ABS_MFE=a
+    elif o == '-rc':
+        MIN_READ_COUNT_THRESHOLD=a
+    # DUPLICATE_FILTER_THRESHOLD, DOMINANT_FACTOR, NON_CANONICAL_PREC_FACTOR are internal variables
+
 ##################################### main script start #####################################
 
 print("miRNA Discovery Project")
