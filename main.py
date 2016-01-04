@@ -19,9 +19,9 @@ smrna_file = open("smrna.fa", "r")  # smRNA library file
 
 # output file list
 output_temp = open(os.path.join(path, "temp"), "w+")
-output_map = open(os.path.join(path, "map"), "r+")
-output_count_pos = open(os.path.join(path, "count_pos"), "r+")
-output_count_neg = open(os.path.join(path, "count_neg"), "r+")
+output_map = open(os.path.join(path, "map"), "w+")
+output_count_pos = open(os.path.join(path, "count_pos"), "w+")
+output_count_neg = open(os.path.join(path, "count_neg"), "w+")
 output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
 output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
@@ -56,7 +56,7 @@ ref_count_list_neg = []
 for i in range(0, len(ref_seq_list)):
     ref_count_list_pos.append([0]*len(ref_seq_list[i]))
     ref_count_list_neg.append([0]*len(ref_seq_list[i]))
-"""
+
 # read smrna file and generate map file
 print("Generating map file from seq library...")
 
@@ -136,7 +136,7 @@ json.dump(ref_count_list_neg, output_count_neg)
 output_count_pos.seek(0, 0)
 output_count_neg.seek(0, 0)
 print("Generating Done")
-"""
+
 # Load previously Dumped count data
 ref_count_list_pos = json.load(output_count_pos)
 ref_count_list_neg = json.load(output_count_neg)

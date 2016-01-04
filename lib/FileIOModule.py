@@ -1,5 +1,11 @@
 __author__ = 'L0SG'
 
+
+def preprocess_smrna_seq(smrna_file):
+
+    return
+
+
 def create_ref_seq(ref_file):
     # Create reference sequence from fasta file and Return as List
     ref_name_list = []
@@ -23,12 +29,6 @@ def create_ref_seq(ref_file):
             tempseq += line
     ref_file.seek(0)
     return ref_name_list, ref_seq_list
-
-def write_mature(output_mature, smrna_info, pm_index_list, star_index_list, dir):
-    return
-
-def write_precursor(output_precursor, smrna_info, precursor_list, dir):
-    return
 
 
 
