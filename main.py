@@ -6,8 +6,8 @@ import json
 import multiprocessing
 import os
 import operator
-import sys
-import getopt
+import argparse
+
 here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
 path = os.path.join(here, subdir)
@@ -15,28 +15,45 @@ if not os.path.exists(path):
     os.mkdir(path)
 
 # parse arguments
-try:
-    opts,args = getopt.getopt(sys.argv[1:],"r:i:o:t:m:M:sm:mm:sb:mb:ml:d:a:s:mfe:rc")
-except getopt.GetoptError as e:
-    print(str(e))
-    print("Usage")
-    sys.exit(2)
+parser = argparse.ArgumentParser()
+parser.add_argument("-r", "--reference", help="reference genome file location")
+parser.add_argument("-i", "--input", help="input small RNA file location")
+parser.add_argument("-o", "--output", help="output file location")
+parser.add_argument("-p", "--RNAfoldpath", help="RNAfold location")
+parser.add_argument("-t", "--thread", help="number of CPU threads", type=int)
+parser.add_argument("-l", "--minlength", help="min. length of mature miRNA", type=int)
+parser.add_argument("-L", "--maxlength", help="max. length of mature miRNA", type=int)
+parser.add_argument("-m", "--serialmismatch", help="max. serial mismatch of miRNA-miRNA* duplex", type=int)
+parser.add_argument("-M", "--multmismatch", help="max. multiple mismatches of miRNA-miRNA* duplex", type=int)
+parser.add_argument("-b", "--serialbulge", help="max. serial bulge of miRNA-miRN* duplex", type=int)
+parser.add_argument("-B", "--multbulge", help="max. multiple bulges of miRNA-miRNA* duplex", type=int)
+parser.add_argument("-u", "--multloci", help="max. multiple loci of miRNA matches to reference genome", type=int)
+parser.add_argument("-d", "--distance", help="max. distance between miRNA-miRNA* of precursor hairpin loop", type=int)
+parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor from mature miRNA(miRNA*)", type=int)
+parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend loop", type=int)
+parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor", type=int)
+parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq displayed at results", type=int)
+args=parser.parse_args()
 
 # input file list
-for o, a in opts:
-    if o == '-r':
-        ref_file = open(a, "r")
-    else:
-        ref_file = open("ref.fa", "r")      # Reference genome file
-    if o == '-i':
-        smrna_file = open(a, "r")
-    else:
-        smrna_file = open("smrna.fa", "r")  # smRNA library file
+if args.reference:
+    ref_file = open(args.reference, "r")
+else:
+    ref_file = open("ref.fa", "r")      # Reference genome file
+if args.input:
+    smrna_file = open(args.input, "r")
+else:
+    smrna_file = open("smrna.fa", "r")  # smRNA library file
+
+# RNAfold path
+if args.RNAfoldpath:
+    RNAfold_path = args.RNAfoldpath
+else:
+    RNAfold_path = "RNAfold"
 
 # output file list
-for o, a in opts:
-    if o == '-o':
-        path = a
+if args.output:
+    path = args.output
 output_temp = open(os.path.join(path, "temp"), "w+")
 output_map = open(os.path.join(path, "map"), "w+")
 output_count_pos = open(os.path.join(path, "count_pos"), "w+")
@@ -62,34 +79,34 @@ MIN_READ_COUNT_THRESHOLD = 2
 DUPLICATE_FILTER_THRESHOLD = 5
 DOMINANT_FACTOR = 1
 NON_CANONICAL_PREC_FACTOR = 0.1
-for o, a in opts:
-    if o == '-t':
-        NUM_THREADS=a
-    elif o == '-m':
-        MATURE_MIN_LEN=a
-    elif o == '-M':
-        MATURE_MAX_LEN=a
-    elif o == '-sm':
-        MAX_SERIAL_MISMATCH=a
-    elif o == '-mm':
-        MAX_MULT_MISMATCH=a
-    elif o == '-sb':
-        MAX_SERIAL_BULGE=a
-    elif o == '-mb':
-        MAX_MULT_BULGE=a
-    elif o == '-ml':
-        MAX_MULTIPLE_LOCI=a
-    elif o == '-d':
-        DISTANCE_THRESHOLD=a
-    elif o == '-a':
-        ARM_EXTEND_THRESHOLD=a
-    elif o == '-s':
-        RNAFOLD_STEP=a
-    elif o == '-mfe':
-        MIN_ABS_MFE=a
-    elif o == '-rc':
-        MIN_READ_COUNT_THRESHOLD=a
-    # DUPLICATE_FILTER_THRESHOLD, DOMINANT_FACTOR, NON_CANONICAL_PREC_FACTOR are internal variables
+
+if args.thread:
+    NUM_THREADS = args.thread
+if args.minlength:
+    MATURE_MIN_LEN = args.minlength
+if args.maxlength:
+    MATURE_MAX_LEN = args.maxlength
+if args.serialmismatch:
+    MAX_SERIAL_MISMATCH = args.serialmismatch
+if args.multmismatch:
+    MAX_MULT_MISMATCH = args.multmismatch
+if args.serialbulge:
+    MAX_SERIAL_BULGE = args.serialbulge
+if args.multbulge:
+    MAX_MULT_BULGE = args.multbulge
+if args.multloci:
+    MAX_MULTIPLE_LOCI = args.multloci
+if args.distance:
+    DISTANCE_THRESHOLD = args.distance
+if args.arm:
+    ARM_EXTEND_THRESHOLD = args.arm
+if args.step:
+    RNAFOLD_STEP = args.step
+if args.mfe:
+    MIN_ABS_MFE = args.mfe
+if args.mincount:
+    MIN_READ_COUNT_THRESHOLD = args.mincount
+# DUPLICATE_FILTER_THRESHOLD, DOMINANT_FACTOR, NON_CANONICAL_PREC_FACTOR are internal variables
 
 ##################################### main script start #####################################
 
@@ -280,7 +297,7 @@ def precursor_generator(lines):
                             rna_fold_seq = SeqModule.create_star(ref_seq_list[k][start:end])
                         if "N" in rna_fold_seq:
                             continue
-                        rnafold = subprocess.Popen(["RNAfold", "--noconv", "-d2", "--noPS", "--noLP"],
+                        rnafold = subprocess.Popen([RNAfold_path, "--noconv", "-d2", "--noPS", "--noLP"],
                                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
                         output = rnafold.communicate(rna_fold_seq)[0].split()
                         abs_energy = re.findall(r'\d*\.\d*', str(output[2]))
@@ -312,7 +329,7 @@ def precursor_generator(lines):
                             rna_fold_seq = SeqModule.create_star(ref_seq_list[k][start:end])
                         if "N" in rna_fold_seq:
                             continue
-                        rnafold = subprocess.Popen(["RNAfold", "--noconv", "-d2", "--noPS", "--noLP"],
+                        rnafold = subprocess.Popen([RNAfold_path, "--noconv", "-d2", "--noPS", "--noLP"],
                                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
                         output = rnafold.communicate(rna_fold_seq)[0].split()
                         abs_energy = re.findall(r'\d*\.\d*', str(output[2]))
