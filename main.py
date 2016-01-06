@@ -25,7 +25,7 @@ parser.add_argument("-l", "--minlength", help="min. length of mature miRNA", typ
 parser.add_argument("-L", "--maxlength", help="max. length of mature miRNA", type=int)
 parser.add_argument("-m", "--serialmismatch", help="max. serial mismatch of miRNA-miRNA* duplex", type=int)
 parser.add_argument("-M", "--multmismatch", help="max. multiple mismatches of miRNA-miRNA* duplex", type=int)
-parser.add_argument("-b", "--serialbulge", help="max. serial bulge of miRNA-miRN* duplex", type=int)
+parser.add_argument("-b", "--serialbulge", help="max. serial bulge of miRNA-miRNA* duplex", type=int)
 parser.add_argument("-B", "--multbulge", help="max. multiple bulges of miRNA-miRNA* duplex", type=int)
 parser.add_argument("-u", "--multloci", help="max. multiple loci of miRNA matches to reference genome", type=int)
 parser.add_argument("-d", "--distance", help="max. distance between miRNA-miRNA* of precursor hairpin loop", type=int)
@@ -33,7 +33,7 @@ parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor 
 parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend loop", type=int)
 parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor", type=int)
 parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq displayed at results", type=int)
-args=parser.parse_args()
+args = parser.parse_args()
 
 # input file list
 if args.reference:
