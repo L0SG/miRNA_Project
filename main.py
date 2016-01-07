@@ -55,9 +55,9 @@ else:
 if args.output:
     path = args.output
 output_temp = open(os.path.join(path, "temp"), "w+")
-output_map = open(os.path.join(path, "map"), "w+")
-output_count_pos = open(os.path.join(path, "count_pos"), "w+")
-output_count_neg = open(os.path.join(path, "count_neg"), "w+")
+output_map = open(os.path.join(path, "map"), "r+")
+output_count_pos = open(os.path.join(path, "count_pos"), "r+")
+output_count_neg = open(os.path.join(path, "count_neg"), "r+")
 output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
 output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
@@ -71,14 +71,15 @@ MAX_MULT_MISMATCH = 2
 MAX_SERIAL_BULGE = 2
 MAX_MULT_BULGE = 2
 MAX_MULTIPLE_LOCI = 20
-DISTANCE_THRESHOLD = 20
+DISTANCE_THRESHOLD = 35
 ARM_EXTEND_THRESHOLD = 10
 RNAFOLD_STEP = 2
 MIN_ABS_MFE = 18
 MIN_READ_COUNT_THRESHOLD = 2
-DUPLICATE_FILTER_THRESHOLD = 5
+DUPLICATE_FILTER_THRESHOLD = 10
 DOMINANT_FACTOR = 1
 NON_CANONICAL_PREC_FACTOR = 0.1
+DISCARD_NO_READ_PREC_FLAG = 1
 
 if args.thread:
     NUM_THREADS = args.thread
@@ -121,7 +122,7 @@ ref_count_list_neg = []
 for i in range(0, len(ref_seq_list)):
     ref_count_list_pos.append([0]*len(ref_seq_list[i]))
     ref_count_list_neg.append([0]*len(ref_seq_list[i]))
-
+"""
 # read smrna file and generate map file
 print("Generating map file from seq library...")
 
@@ -201,7 +202,7 @@ json.dump(ref_count_list_neg, output_count_neg)
 output_count_pos.seek(0, 0)
 output_count_neg.seek(0, 0)
 print("Generating Done")
-
+"""
 # Load previously Dumped count data
 ref_count_list_pos = json.load(output_count_pos)
 ref_count_list_neg = json.load(output_count_neg)
@@ -300,6 +301,18 @@ def precursor_generator(lines):
                         rnafold = subprocess.Popen([RNAfold_path, "--noconv", "-d2", "--noPS", "--noLP"],
                                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
                         output = rnafold.communicate(rna_fold_seq)[0].split()
+                        # Discard non-canonical (i.e. "hard to identify") precursor
+                        pc_structure_left = output[1].strip("\n")[0:len(output[1].strip("\n"))/2]
+                        pc_structure_right = output[1].strip("\n")[len(output[1].strip("\n"))/2:len(output[1].strip("\n"))]
+                        num_open_left = pc_structure_left.count("(")
+                        num_close_left = pc_structure_left.count(")")
+                        num_open_right = pc_structure_right.count("(")
+                        num_close_right = pc_structure_right.count(")")
+                        if num_open_left == 0 or num_close_right == 0:
+                            continue
+                        if float(num_close_left)/num_open_left > NON_CANONICAL_PREC_FACTOR or\
+                                                float(num_open_right)/num_close_right > NON_CANONICAL_PREC_FACTOR:
+                            continue
                         abs_energy = re.findall(r'\d*\.\d*', str(output[2]))
                         if abs_energy != []:
                             if float(abs_energy[0]) >= MIN_ABS_MFE:
@@ -332,6 +345,18 @@ def precursor_generator(lines):
                         rnafold = subprocess.Popen([RNAfold_path, "--noconv", "-d2", "--noPS", "--noLP"],
                                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)
                         output = rnafold.communicate(rna_fold_seq)[0].split()
+                        # Discard non-canonical (i.e. "hard to identify") precursor
+                        pc_structure_left = output[1].strip("\n")[0:len(output[1].strip("\n"))/2]
+                        pc_structure_right = output[1].strip("\n")[len(output[1].strip("\n"))/2:len(output[1].strip("\n"))]
+                        num_open_left = pc_structure_left.count("(")
+                        num_close_left = pc_structure_left.count(")")
+                        num_open_right = pc_structure_right.count("(")
+                        num_close_right = pc_structure_right.count(")")
+                        if num_open_left == 0 or num_close_right == 0:
+                            continue
+                        if float(num_close_left)/num_open_left > NON_CANONICAL_PREC_FACTOR or\
+                                                float(num_open_right)/num_close_right > NON_CANONICAL_PREC_FACTOR:
+                            continue
                         abs_energy = re.findall(r'\d*\.\d*', str(output[2]))
                         if abs_energy != []:
                             if float(abs_energy[0]) >= MIN_ABS_MFE:
@@ -447,6 +472,24 @@ while 1:
                                                                       MAX_SERIAL_BULGE, MAX_MULT_BULGE)
     if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
         continue
+
+    # if no read data is matched in putative precursors, discard it
+    if DISCARD_NO_READ_PREC_FLAG:
+        count = 0
+        if line_info.split()[5] == "+":
+            for i in range(0, len(map_data)):
+                if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
+                        and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                    count += 1
+        elif line_info.split()[5] == "-":
+            for i in range(0, len(map_data)):
+                if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
+                        and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                    count += 1
+        if count == 0:
+            continue
+
+    # write putative precursor to the output file
     result_count += 1
     output_mature.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")
     output_mature.write(line_info+"\n"+line_seq+"\n"+line_db+"\n")
