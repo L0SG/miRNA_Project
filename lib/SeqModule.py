@@ -101,7 +101,7 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
     start_3p = 0
     end_3p = 0
     norm_score = 999
-    for i in range(0, len(precursor_db)/2 - mature_min_len):  # search potential -5p seq form zero to half the sequence length
+    for i in range(0, len(precursor_db) - mature_min_len):  # search potential -5p seq
         for j in range(mature_min_len, mature_max_len):
             target_5p = precursor_db[i:i+j]
             if ")" in target_5p:
