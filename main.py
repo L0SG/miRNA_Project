@@ -16,23 +16,23 @@ if not os.path.exists(path):
 
 # parse arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("-r", "--reference", help="reference genome file location")
-parser.add_argument("-i", "--input", help="input small RNA file location")
+parser.add_argument("-r", "--reference", help="reference genome file location(.fa, .fasta)")
+parser.add_argument("-i", "--input", help="input small RNA file location(.fa, .fasta)")
 parser.add_argument("-o", "--output", help="output file location")
-parser.add_argument("-p", "--RNAfoldpath", help="RNAfold location")
-parser.add_argument("-t", "--thread", help="number of CPU threads", type=int)
-parser.add_argument("-l", "--minlength", help="min. length of mature miRNA", type=int)
-parser.add_argument("-L", "--maxlength", help="max. length of mature miRNA", type=int)
-parser.add_argument("-m", "--serialmismatch", help="max. serial mismatch of miRNA-miRNA* duplex", type=int)
-parser.add_argument("-M", "--multmismatch", help="max. multiple mismatches of miRNA-miRNA* duplex", type=int)
-parser.add_argument("-b", "--serialbulge", help="max. serial bulge of miRNA-miRNA* duplex", type=int)
-parser.add_argument("-B", "--multbulge", help="max. multiple bulges of miRNA-miRNA* duplex", type=int)
-parser.add_argument("-u", "--multloci", help="max. multiple loci of miRNA matches to reference genome", type=int)
-parser.add_argument("-d", "--distance", help="max. distance between miRNA-miRNA* of precursor hairpin loop", type=int)
-parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor from mature miRNA(miRNA*)", type=int)
-parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend loop", type=int)
-parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor", type=int)
-parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq displayed at results", type=int)
+parser.add_argument("-p", "--RNAfoldpath", help="RNAfold location (default : command \"RNAfold\")")
+parser.add_argument("-t", "--thread", help="number of CPU threads (default : 1)", type=int)
+parser.add_argument("-l", "--minlength", help="min. length of mature miRNA (default : 18)", type=int)
+parser.add_argument("-L", "--maxlength", help="max. length of mature miRNA (default : 26)", type=int)
+parser.add_argument("-m", "--serialmismatch", help="max. serial mismatch of miRNA-miRNA* duplex (default : 2)", type=int)
+parser.add_argument("-M", "--multmismatch", help="max. multiple mismatches of miRNA-miRNA* duplex (default : 2)", type=int)
+parser.add_argument("-b", "--serialbulge", help="max. serial bulge of miRNA-miRNA* duplex (default : 2)", type=int)
+parser.add_argument("-B", "--multbulge", help="max. multiple bulges of miRNA-miRNA* duplex (default : 2)", type=int)
+parser.add_argument("-u", "--multloci", help="max. multiple loci of miRNA matches to reference genome (default : 20)", type=int)
+parser.add_argument("-d", "--distance", help="max. distance between miRNA-miRNA* of precursor hairpin loop (default : 35)", type=int)
+parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor from mature miRNA(miRNA*) (default : 10)", type=int)
+parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend loop (default : 2)", type=int)
+parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor (default : 18)", type=int)
+parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq displayed at results (default : 2)", type=int)
 args = parser.parse_args()
 
 # input file list
@@ -54,10 +54,10 @@ else:
 # output file list
 if args.output:
     path = args.output
-output_temp = open(os.path.join(path, "temp"), "w+")
-output_map = open(os.path.join(path, "map"), "r+")
-output_count_pos = open(os.path.join(path, "count_pos"), "r+")
-output_count_neg = open(os.path.join(path, "count_neg"), "r+")
+if os.path.exists(os.path.join(path, "map")):
+    output_map = open(os.path.join(path, "map"), "r")
+    output_count_pos = open(os.path.join(path, "count_pos"), "r")
+    output_count_neg = open(os.path.join(path, "count_neg"), "r")
 output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
 output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
@@ -78,7 +78,7 @@ MIN_ABS_MFE = 18
 MIN_READ_COUNT_THRESHOLD = 2
 DUPLICATE_FILTER_THRESHOLD = 10
 DOMINANT_FACTOR = 0.9
-NON_CANONICAL_PREC_FACTOR = 0.1
+NON_CANONICAL_PREC_FACTOR = 0.01   # smaller value makes it more "canonical"
 DISCARD_NO_READ_PREC_FLAG = 1
 
 if args.thread:
@@ -122,91 +122,98 @@ ref_count_list_neg = []
 for i in range(0, len(ref_seq_list)):
     ref_count_list_pos.append([0]*len(ref_seq_list[i]))
     ref_count_list_neg.append([0]*len(ref_seq_list[i]))
-"""
-# read smrna file and generate map file
-print("Generating map file from seq library...")
 
 
-def map_generator(lines):
-    output_map_linelist = []
-    ref_count_list_poslist = []
-    ref_count_list_neglist = []
+# check whether map file was generated before
+if os.path.exists(os.path.join(path, "map")):
+    print("map file detected, skipping map generation...")
+    # Load previously Dumped count data
+    ref_count_list_pos = json.load(output_count_pos)
+    ref_count_list_neg = json.load(output_count_neg)
 
-    for i in range(0, len(ref_seq_list)):
-        ref_count_list_poslist.append([])
-        ref_count_list_neglist.append([])
-
-    for z in range(0, len(lines), 2):
-        smrna_info = lines[z].strip().split()
-        smrna_seq = lines[z+1].strip()  # seq for pos match
-        smrna_star = SeqModule.create_star(smrna_seq)  # seq for neg match
-        # decide whether smrna_seq perfectly match genome seq
-        # return type : 2D list
-        # each matched case returns zero based begin, end index (2-element tuple)
-        # character of end index is NOT contained in seq
-        # [0][0] : first genome, first matched indices, [0][1] : first genome, second matched indices
-        # [1][0] : second genome, first matched indices, [1][1] : second matched indices ...
-        pm_index_list_pos = SeqModule.find_perfect_match(smrna_seq, ref_seq_list,
-                                                         MATURE_MIN_LEN, MATURE_MAX_LEN, MAX_MULTIPLE_LOCI)
-        pm_index_list_neg = SeqModule.find_perfect_match(smrna_star, ref_seq_list,
-                                                         MATURE_MIN_LEN, MATURE_MAX_LEN, MAX_MULTIPLE_LOCI)
-        for i in range(0, len(pm_index_list_pos)):
-            for j in range(0, len(pm_index_list_pos[i])):
-                output_map_linelist.append(smrna_info[0]+"\t"+smrna_info[1]+"\t"+ref_name_list[i]+"\t"+
-                                           str(pm_index_list_pos[i][j][0])+"\t"+str(pm_index_list_pos[i][j][1])+
-                                           "\t"+"+"+"\t"+smrna_seq+"\n")
-                ref_count_list_poslist[i].append([pm_index_list_pos[i][j][0], int(smrna_info[1])])
-        for i in range(0, len(pm_index_list_neg)):
-            for j in range(0, len(pm_index_list_neg[i])):
-                output_map_linelist.append(smrna_info[0]+"\t"+smrna_info[1]+"\t"+ref_name_list[i]+"\t"+
-                                           str(pm_index_list_neg[i][j][0])+"\t"+str(pm_index_list_neg[i][j][1])+
-                                           "\t"+"-"+"\t"+smrna_seq+"\n")
-                ref_count_list_neglist[i].append([pm_index_list_neg[i][j][1], int(smrna_info[1])])
-        # count_list_list[i][j][0] : i-th genome, j-th match begin index
-        # count_list_list[i][j][1] : i-th genome, j-th match count
-    return output_map_linelist, ref_count_list_poslist, ref_count_list_neglist
+else:
+    # read smrna file and generate map file
+    output_map = open(os.path.join(path, "map"), "w+")
+    output_count_pos = open(os.path.join(path, "count_pos"), "w+")
+    output_count_neg = open(os.path.join(path, "count_neg"), "w+")
+    print("Generating map file from seq library...")
 
 
-if __name__ == '__main__':
-    lines = smrna_file.readlines()
-    pool = multiprocessing.Pool(processes=NUM_THREADS)
-    numlines = 1000
-    result_list = pool.map(map_generator, (lines[line:line+numlines] for line in xrange(0, len(lines), numlines)))
-    output_map_result=[]
-    ref_count_list_pos_result=[]
-    ref_count_list_neg_result=[]
+    def map_generator(lines):
+        output_map_linelist = []
+        ref_count_list_poslist = []
+        ref_count_list_neglist = []
 
-    for i in range(0, len(ref_seq_list)):
-        ref_count_list_pos_result.append([])
-        ref_count_list_neg_result.append([])
+        for i in range(0, len(ref_seq_list)):
+            ref_count_list_poslist.append([])
+            ref_count_list_neglist.append([])
 
-    for i in range(0, len(result_list)):
-        output_map_result += result_list[i][0]
-        for j in range(0, len(ref_seq_list)):
-            ref_count_list_pos_result[j].extend(result_list[i][1][j])
-            ref_count_list_neg_result[j].extend(result_list[i][2][j])
+        for z in range(0, len(lines), 2):
+            smrna_info = lines[z].strip().split()
+            smrna_seq = lines[z+1].strip()  # seq for pos match
+            smrna_star = SeqModule.create_star(smrna_seq)  # seq for neg match
+            # decide whether smrna_seq perfectly match genome seq
+            # return type : 2D list
+            # each matched case returns zero based begin, end index (2-element tuple)
+            # character of end index is NOT contained in seq
+            # [0][0] : first genome, first matched indices, [0][1] : first genome, second matched indices
+            # [1][0] : second genome, first matched indices, [1][1] : second matched indices ...
+            pm_index_list_pos = SeqModule.find_perfect_match(smrna_seq, ref_seq_list,
+                                                             MATURE_MIN_LEN, MATURE_MAX_LEN, MAX_MULTIPLE_LOCI)
+            pm_index_list_neg = SeqModule.find_perfect_match(smrna_star, ref_seq_list,
+                                                             MATURE_MIN_LEN, MATURE_MAX_LEN, MAX_MULTIPLE_LOCI)
+            for i in range(0, len(pm_index_list_pos)):
+                for j in range(0, len(pm_index_list_pos[i])):
+                    output_map_linelist.append(smrna_info[0]+"\t"+smrna_info[1]+"\t"+ref_name_list[i]+"\t"+
+                                               str(pm_index_list_pos[i][j][0])+"\t"+str(pm_index_list_pos[i][j][1])+
+                                               "\t"+"+"+"\t"+smrna_seq+"\n")
+                    ref_count_list_poslist[i].append([pm_index_list_pos[i][j][0], int(smrna_info[1])])
+            for i in range(0, len(pm_index_list_neg)):
+                for j in range(0, len(pm_index_list_neg[i])):
+                    output_map_linelist.append(smrna_info[0]+"\t"+smrna_info[1]+"\t"+ref_name_list[i]+"\t"+
+                                               str(pm_index_list_neg[i][j][0])+"\t"+str(pm_index_list_neg[i][j][1])+
+                                               "\t"+"-"+"\t"+smrna_seq+"\n")
+                    ref_count_list_neglist[i].append([pm_index_list_neg[i][j][1], int(smrna_info[1])])
+            # count_list_list[i][j][0] : i-th genome, j-th match begin index
+            # count_list_list[i][j][1] : i-th genome, j-th match count
+        return output_map_linelist, ref_count_list_poslist, ref_count_list_neglist
 
-    for i in range(0, len(output_map_result)):
-        output_map.write(str(output_map_result[i]))
 
-    for i in range(0, len(ref_seq_list)):
-        for j in range(0, len(ref_count_list_pos_result[i])):
-            ref_count_list_pos[i][int(ref_count_list_pos_result[i][j][0])] += ref_count_list_pos_result[i][j][1]
-        for j in range(0, len(ref_count_list_neg_result[i])):
-            ref_count_list_neg[i][int(ref_count_list_neg_result[i][j][0])] += ref_count_list_neg_result[i][j][1]
-output_map.seek(0, 0)
+    if __name__ == '__main__':
+        lines = smrna_file.readlines()
+        pool = multiprocessing.Pool(processes=NUM_THREADS)
+        numlines = 1000
+        result_list = pool.map(map_generator, (lines[line:line+numlines] for line in xrange(0, len(lines), numlines)))
+        output_map_result=[]
+        ref_count_list_pos_result=[]
+        ref_count_list_neg_result=[]
 
-# Dump count data file for future usage and skip mapping
-json.dump(ref_count_list_pos, output_count_pos)
-json.dump(ref_count_list_neg, output_count_neg)
-output_count_pos.seek(0, 0)
-output_count_neg.seek(0, 0)
-print("Generating Done")
-"""
-# Load previously Dumped count data
-ref_count_list_pos = json.load(output_count_pos)
-ref_count_list_neg = json.load(output_count_neg)
+        for i in range(0, len(ref_seq_list)):
+            ref_count_list_pos_result.append([])
+            ref_count_list_neg_result.append([])
 
+        for i in range(0, len(result_list)):
+            output_map_result += result_list[i][0]
+            for j in range(0, len(ref_seq_list)):
+                ref_count_list_pos_result[j].extend(result_list[i][1][j])
+                ref_count_list_neg_result[j].extend(result_list[i][2][j])
+
+        for i in range(0, len(output_map_result)):
+            output_map.write(str(output_map_result[i]))
+
+        for i in range(0, len(ref_seq_list)):
+            for j in range(0, len(ref_count_list_pos_result[i])):
+                ref_count_list_pos[i][int(ref_count_list_pos_result[i][j][0])] += ref_count_list_pos_result[i][j][1]
+            for j in range(0, len(ref_count_list_neg_result[i])):
+                ref_count_list_neg[i][int(ref_count_list_neg_result[i][j][0])] += ref_count_list_neg_result[i][j][1]
+    output_map.seek(0, 0)
+
+    # Dump count data file for future usage and skip mapping
+    json.dump(ref_count_list_pos, output_count_pos)
+    json.dump(ref_count_list_neg, output_count_neg)
+    output_count_pos.seek(0, 0)
+    output_count_neg.seek(0, 0)
+    print("Generating Done")
 
 # use RNAfold to calculate MFE and select putative precursor
 print("Calculating MFE of putative precursors with RNAfold...")
