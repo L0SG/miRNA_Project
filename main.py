@@ -203,8 +203,14 @@ else:
 
         for i in range(0, len(ref_seq_list)):
             for j in range(0, len(ref_count_list_pos_result[i])):
+                if int(ref_count_list_pos_result[i][j][0])>=len(ref_count_list_pos[i]):
+                    print int(ref_count_list_pos_result[i][j][0])
+                    print "error pos"
                 ref_count_list_pos[i][int(ref_count_list_pos_result[i][j][0])] += ref_count_list_pos_result[i][j][1]
             for j in range(0, len(ref_count_list_neg_result[i])):
+                if int(ref_count_list_neg_result[i][j][0])>=len(ref_count_list_neg[i]):
+                    print int(ref_count_list_neg_result[i][j][0])
+                    print "error neg"
                 ref_count_list_neg[i][int(ref_count_list_neg_result[i][j][0])] += ref_count_list_neg_result[i][j][1]
     output_map.seek(0, 0)
 
@@ -290,6 +296,10 @@ def precursor_generator(lines):
         # WARNING : if abs. of calculated free energy is less than 10, output[2] does not contain proper value
         # Skipping this precursor line is proper, since threshold value is at least 18
         for k in range(0, len(ref_seq_list)):  # reference sequence list loop
+            # 160205 : No need to search other genomes
+            # but fixed, need better implementation (remove ref seq loop)
+            if name_list_index != k:
+                continue
             # 150907 : No need to loop arm extension? miREAP only uses const FLANK var (10)
             # disabling arm extension loop has no significant difference, but can reduce time complexity
             for i in range(ARM_EXTEND_THRESHOLD, ARM_EXTEND_THRESHOLD+1):  # arm extension loop (disabled)

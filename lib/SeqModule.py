@@ -11,6 +11,8 @@ def find_perfect_match(seq, ref, min, max, maxmult):
         templist = [temp.span() for temp in re.finditer(seq, str(ref[i]))]
         if templist != [] and len(templist) <= maxmult:
             list2d.append(templist)
+        elif templist == []:
+            list2d.append(templist)
     return list2d
 
 
