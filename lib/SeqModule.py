@@ -4,7 +4,7 @@ import re
 # Pre-Alpha version for testing purpose : does not have proper min, max implementation
 
 
-def find_perfect_match(seq, ref, min, max, maxmult):
+def find_perfect_match(seq, ref, maxmult):
     # find perfect match index
     list2d = []
     for i in range(0, len(ref)):
@@ -14,6 +14,18 @@ def find_perfect_match(seq, ref, min, max, maxmult):
         elif templist == []:
             list2d.append(templist)
     return list2d
+
+
+def convert_bowtie_output(output_bowtie, output_map):
+    for line in output_bowtie:
+        line_split = line.split()
+        if line_split[2] == "-":
+            seq = create_star(line_split[5])
+        else:
+            seq = line_split[5]
+        seq_index_end = int(line_split[4])+len(line_split[5])
+        output_map.write(line_split[0]+"\t"+line_split[1]+"\t"+line_split[3]+"\t"+
+                         line_split[4]+"\t"+str(seq_index_end)+"\t"+line_split[2]+"\t"+seq+"\n")
 
 
 def create_star(smrna_seq):
@@ -165,6 +177,83 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
                     break
     return start_5p, end_5p, start_3p, end_3p
 
+
+def builtin_map_generator(smrna_file, ref_name_list, ref_seq_list,
+                          output_map, ref_count_list_pos, ref_count_list_neg,
+                          NUM_THREADS, MAX_MULTIPLE_LOCI):
+    import multiprocessing
+    def map_generator(lines):
+        output_map_linelist = []
+        ref_count_list_poslist = []
+        ref_count_list_neglist = []
+
+        for i in range(0, len(ref_seq_list)):
+            ref_count_list_poslist.append([])
+            ref_count_list_neglist.append([])
+
+        for z in range(0, len(lines), 2):
+            smrna_info = lines[z].strip().split()
+            smrna_seq = lines[z+1].strip()  # seq for pos match
+            smrna_star = create_star(smrna_seq)  # seq for neg match
+            # decide whether smrna_seq perfectly match genome seq
+            # return type : 2D list
+            # each matched case returns zero based begin, end index (2-element tuple)
+            # character of end index is NOT contained in seq
+            # [0][0] : first genome, first matched indices, [0][1] : first genome, second matched indices
+            # [1][0] : second genome, first matched indices, [1][1] : second matched indices ...
+            pm_index_list_pos = find_perfect_match(smrna_seq, ref_seq_list, MAX_MULTIPLE_LOCI)
+            pm_index_list_neg = find_perfect_match(smrna_star, ref_seq_list, MAX_MULTIPLE_LOCI)
+            for i in range(0, len(pm_index_list_pos)):
+                for j in range(0, len(pm_index_list_pos[i])):
+                    output_map_linelist.append(smrna_info[0]+"\t"+smrna_info[1]+"\t"+ref_name_list[i]+"\t"+
+                                               str(pm_index_list_pos[i][j][0])+"\t"+str(pm_index_list_pos[i][j][1])+
+                                               "\t"+"+"+"\t"+smrna_seq+"\n")
+                    ref_count_list_poslist[i].append([pm_index_list_pos[i][j][0], int(smrna_info[1])])
+            for i in range(0, len(pm_index_list_neg)):
+                for j in range(0, len(pm_index_list_neg[i])):
+                    output_map_linelist.append(smrna_info[0]+"\t"+smrna_info[1]+"\t"+ref_name_list[i]+"\t"+
+                                               str(pm_index_list_neg[i][j][0])+"\t"+str(pm_index_list_neg[i][j][1])+
+                                               "\t"+"-"+"\t"+smrna_seq+"\n")
+                    ref_count_list_neglist[i].append([pm_index_list_neg[i][j][1], int(smrna_info[1])])
+            # count_list_list[i][j][0] : i-th genome, j-th match begin index
+            # count_list_list[i][j][1] : i-th genome, j-th match count
+        return output_map_linelist, ref_count_list_poslist, ref_count_list_neglist
+
+
+    if __name__ == '__main__':
+        lines = smrna_file.readlines()
+        pool = multiprocessing.Pool(processes=NUM_THREADS)
+        numlines = 1000
+        result_list = pool.map(map_generator, (lines[line:line+numlines] for line in xrange(0, len(lines), numlines)))
+        output_map_result=[]
+        ref_count_list_pos_result=[]
+        ref_count_list_neg_result=[]
+
+        for i in range(0, len(ref_seq_list)):
+            ref_count_list_pos_result.append([])
+            ref_count_list_neg_result.append([])
+
+        for i in range(0, len(result_list)):
+            output_map_result += result_list[i][0]
+            for j in range(0, len(ref_seq_list)):
+                ref_count_list_pos_result[j].extend(result_list[i][1][j])
+                ref_count_list_neg_result[j].extend(result_list[i][2][j])
+
+        for i in range(0, len(output_map_result)):
+            output_map.write(str(output_map_result[i]))
+
+        for i in range(0, len(ref_seq_list)):
+            for j in range(0, len(ref_count_list_pos_result[i])):
+                if int(ref_count_list_pos_result[i][j][0])>=len(ref_count_list_pos[i]):
+                    print int(ref_count_list_pos_result[i][j][0])
+                    print "error pos"
+                ref_count_list_pos[i][int(ref_count_list_pos_result[i][j][0])] += ref_count_list_pos_result[i][j][1]
+            for j in range(0, len(ref_count_list_neg_result[i])):
+                if int(ref_count_list_neg_result[i][j][0])>=len(ref_count_list_neg[i]):
+                    print int(ref_count_list_neg_result[i][j][0])
+                    print "error neg"
+                ref_count_list_neg[i][int(ref_count_list_neg_result[i][j][0])] += ref_count_list_neg_result[i][j][1]
+    output_map.seek(0, 0)
 
 
 
