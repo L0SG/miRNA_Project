@@ -17,11 +17,13 @@ def create_ref_seq(ref_file):
     while 1:
         line = ref_file.readline().strip()
         if line == "":
+            tempseq = tempseq.upper()
             ref_seq_list.append(tempseq)
             break
         elif line.startswith(">"):
             line_split=line.split()
             ref_name_list.append(line_split[0][1:])
+            tempseq = tempseq.upper()
             ref_seq_list.append(tempseq)
             tempseq = ""
             continue

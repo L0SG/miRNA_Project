@@ -2,11 +2,11 @@ from lib import FileIOModule
 from lib import SeqModule
 import subprocess
 import re
-import json
 import multiprocessing
 import os
 import operator
 import argparse
+import cPickle
 
 here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
@@ -134,15 +134,13 @@ for i in range(0, len(ref_seq_list)):
 
 
 # check whether map file was generated before
-"""
+
 if os.path.exists(os.path.join(path, "map")):
     print("map file detected, skipping map generation...")
     # Load previously Dumped count data
-    ref_count_list_pos = json.load(output_count_pos)
-    ref_count_list_neg = json.load(output_count_neg)
-"""
-if 0:
-    print("")
+    ref_count_dump_pos = cPickle.load(output_count_pos)
+    ref_count_dump_neg = cPickle.load(output_count_neg)
+
 else:
     # read smrna file and generate map file
     output_map = open(os.path.join(path, "map"), "w+")
@@ -150,7 +148,7 @@ else:
     output_count_neg = open(os.path.join(path, "count_neg"), "w+")
 
     # genarate map file using bowtie
-    print("Generating map file from seq library...")
+
     # generate bowtie index
     # index files are saved to current working directory
     # i.e. the directory where the main script is running
@@ -158,6 +156,7 @@ else:
         ref_file_path = args.reference
     else:
         ref_file_path = os.path.join(os.getcwd(), "ref.fa")
+    print("Generating index file with bowtie_build...")
     bowtie_build = subprocess.Popen([bowtie_path+"/bowtie-build",
                                ref_file_path,
                                os.path.join(os.getcwd(), str(ref_file.name))],
@@ -166,6 +165,7 @@ else:
 
     # map to reference genome and generate bowtie map file
     # bowtie map file format is different, need to convert
+    print("Mapping smrna-seq to reference genome with bowtie...")
     bowtie = subprocess.Popen([bowtie_path+"/bowtie", str(ref_file.name),
                       "-f", os.path.join(os.getcwd(), "smrna.fa"),
                       os.path.join(path, "map_bowtie"),
@@ -184,16 +184,16 @@ else:
     ref_count_dump_pos, ref_count_dump_neg = SeqModule.count_generator(ref_name_list, output_map)
     output_map.seek(0, 0)
 
-    # convert count dump data to original count list data
-    SeqModule.convert_dump_to_list(ref_count_dump_pos, ref_count_list_pos)
-    SeqModule.convert_dump_to_list(ref_count_dump_neg, ref_count_list_neg)
-
     # dump count data file for future usage and skip mapping
-    json.dump(ref_count_dump_pos, output_count_pos)
-    json.dump(ref_count_dump_neg, output_count_neg)
+    cPickle.dump(ref_count_dump_pos, output_count_pos, -1)
+    cPickle.dump(ref_count_dump_neg, output_count_neg, -1)
     output_count_pos.seek(0, 0)
     output_count_neg.seek(0, 0)
     print("Generating Done")
+
+# convert count dump data to original count list data
+SeqModule.convert_dump_to_list(ref_count_dump_pos, ref_count_list_pos)
+SeqModule.convert_dump_to_list(ref_count_dump_neg, ref_count_list_neg)
 
 # use RNAfold to calculate MFE and select putative precursor
 print("Calculating MFE of putative precursors with RNAfold...")
@@ -208,6 +208,7 @@ def precursor_generator(lines):
         # Rare occasion of improper line data : should skip it
         if len(line_split) != 7:
             continue
+
         # Screen for Drosha / Dicer cutting sites (Inspired by miREAP)
         qualified_flag = 1
         name_list_index = ref_name_list.index(line_split[2])
@@ -381,7 +382,7 @@ output_precursor.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPo
 if __name__ == '__main__':
     lines = output_map.readlines()
     pool = multiprocessing.Pool(processes=NUM_THREADS)
-    numlines = 50
+    numlines = 500
     result_list = pool.map(precursor_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
     output_precursor_info_result = []
     output_precursor_db_result = []
