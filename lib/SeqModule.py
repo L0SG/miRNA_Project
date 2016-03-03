@@ -51,6 +51,39 @@ def create_star(smrna_seq):
     return star_seq_result
 
 
+def count_generator(ref_name_list, output_map):
+    count_list_pos=[]
+    count_list_neg=[]
+    for i in xrange(0, len(ref_name_list)):
+        count_list_pos.append({})
+        count_list_neg.append({})
+
+    for line in output_map:
+        line_split = line.split()
+        name_list_index = ref_name_list.index(line_split[2])
+        count = int(line_split[1])
+        index_pos = int(line_split[3])
+        index_neg = int(line_split[4])
+        sign = line_split[5]
+        if sign == "+":
+            if not index_pos in count_list_pos[name_list_index]:
+                count_list_pos[name_list_index][index_pos] = count
+            else:
+                count_list_pos[name_list_index][index_pos] += count
+        elif sign == "-":
+            if not index_neg in count_list_neg[name_list_index]:
+                count_list_neg[name_list_index][index_neg] = count
+            else:
+                count_list_neg[name_list_index][index_neg] += count
+    return count_list_pos, count_list_neg
+
+
+def convert_dump_to_list(ref_count_dump, ref_count_list):
+    for i in xrange(0, len(ref_count_dump)):
+        for j in ref_count_dump[i]:
+            value = ref_count_dump[i][j]
+            ref_count_list[i][j] += value
+
 def score_seq(target_5p, target_3p):
     i_5p = 0
     i_3p = 0

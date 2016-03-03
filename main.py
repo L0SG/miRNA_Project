@@ -172,17 +172,21 @@ else:
                       "-v", "0", "-m", str(MAX_MULTIPLE_LOCI), "-a", "-t", "-p", str(NUM_THREADS)],
                      stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     bowtie.wait()
+
+    # open bowtie-generated map file (read-only, no need to be changed)
     output_bowtie = open(os.path.join(path, "map_bowtie"), "r")
 
     # convert bowtie map file format to correct form
     SeqModule.convert_bowtie_output(output_bowtie, output_map)
+    output_map.seek(0, 0)
 
     # generate count data using map file
-    ref_count_list_pos, ref_count_list_neg = SeqModule.count_generator(output_bowtie)
+    ref_count_dump_pos, ref_count_dump_neg = SeqModule.count_generator(ref_name_list, output_map)
+    output_map.seek(0, 0)
 
-    # convert count data to memory efficient format
-    ref_count_dump_pos = SeqModule.convert_count_data(ref_count_list_pos)
-    ref_count_dump_neg = SeqModule.convert_count_data(ref_count_list_neg)
+    # convert count dump data to original count list data
+    SeqModule.convert_dump_to_list(ref_count_dump_pos, ref_count_list_pos)
+    SeqModule.convert_dump_to_list(ref_count_dump_neg, ref_count_list_neg)
 
     # dump count data file for future usage and skip mapping
     json.dump(ref_count_dump_pos, output_count_pos)
