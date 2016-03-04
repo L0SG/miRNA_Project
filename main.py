@@ -65,6 +65,8 @@ if os.path.exists(os.path.join(path, "map")):
     output_map = open(os.path.join(path, "map"), "r")
     output_count_pos = open(os.path.join(path, "count_pos"), "r")
     output_count_neg = open(os.path.join(path, "count_neg"), "r")
+    ref_count_dump_pos = cPickle.load(output_count_pos)
+    ref_count_dump_neg = cPickle.load(output_count_neg)
 output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
 output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
@@ -126,27 +128,13 @@ print("dept. of Applied Biology & Chemistry, Seoul National University")
 # Read reference file and generate reference sequence list
 print("Loading reference genome file to memory...")
 ref_name_list, ref_seq_list = FileIOModule.create_ref_seq(ref_file)
-ref_count_list_pos = []
-ref_count_list_neg = []
-for i in range(0, len(ref_seq_list)):
-    ref_count_list_pos.append([0]*len(ref_seq_list[i]))
-    ref_count_list_neg.append([0]*len(ref_seq_list[i]))
 
 
-# check whether map file was generated before
-
-if os.path.exists(os.path.join(path, "map")):
-    print("map file detected, skipping map generation...")
-    # Load previously Dumped count data
-    ref_count_dump_pos = cPickle.load(output_count_pos)
-    ref_count_dump_neg = cPickle.load(output_count_neg)
-
+# check whether index file was generated before
+print(os.path.join(os.getcwd(), str(ref_file.name)+".1.ebwt"))
+if os.path.exists(os.path.join(os.getcwd(), str(ref_file.name)+".1.ebwt")):
+    print("index file detected, skipping index generation...")
 else:
-    # read smrna file and generate map file
-    output_map = open(os.path.join(path, "map"), "w+")
-    output_count_pos = open(os.path.join(path, "count_pos"), "w+")
-    output_count_neg = open(os.path.join(path, "count_neg"), "w+")
-
     # genarate map file using bowtie
 
     # generate bowtie index
@@ -163,16 +151,27 @@ else:
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     bowtie_build.wait()
 
-    # map to reference genome and generate bowtie map file
-    # bowtie map file format is different, need to convert
+# map to reference genome and generate bowtie map file
+# bowtie map file format is different, need to convert
+if os.path.exists(os.path.join(path, "map")):
+    print("map file detected, skipping map generation...")
+else:
+    output_map = open(os.path.join(path, "map"), "w+")
+    output_count_pos = open(os.path.join(path, "count_pos"), "w+")
+    output_count_neg = open(os.path.join(path, "count_neg"), "w+")
+    if args.input:
+        smrna_file_path = args.input
+    else:
+        smrna_file_path = os.path.join(os.getcwd(), "smrna.fa")
     print("Mapping smrna-seq to reference genome with bowtie...")
     bowtie = subprocess.Popen([bowtie_path+"/bowtie", str(ref_file.name),
-                      "-f", os.path.join(os.getcwd(), "smrna.fa"),
-                      os.path.join(path, "map_bowtie"),
-                      "-v", "0", "-m", str(MAX_MULTIPLE_LOCI), "-a", "-t", "-p", str(NUM_THREADS)],
-                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                               "-f", smrna_file_path,
+                               os.path.join(path, "map_bowtie"),
+                               "-v", "0", "-m", str(MAX_MULTIPLE_LOCI), "-a", "-t", "-p", str(NUM_THREADS)],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     bowtie.wait()
 
+    print("converting bowtie map format to correct map format...")
     # open bowtie-generated map file (read-only, no need to be changed)
     output_bowtie = open(os.path.join(path, "map_bowtie"), "r")
 
@@ -180,6 +179,7 @@ else:
     SeqModule.convert_bowtie_output(output_bowtie, output_map)
     output_map.seek(0, 0)
 
+    print("generating count data using map file...")
     # generate count data using map file
     ref_count_dump_pos, ref_count_dump_neg = SeqModule.count_generator(ref_name_list, output_map)
     output_map.seek(0, 0)
@@ -189,7 +189,19 @@ else:
     cPickle.dump(ref_count_dump_neg, output_count_neg, -1)
     output_count_pos.seek(0, 0)
     output_count_neg.seek(0, 0)
-    print("Generating Done")
+    print("mapping Done")
+
+
+# generate count list
+print("generating read count information list...")
+class count_list(dict):
+    def __missing__(self, key):
+        return 0
+ref_count_list_pos = []
+ref_count_list_neg = []
+for i in range(0, len(ref_seq_list)):
+    ref_count_list_pos.append(count_list())
+    ref_count_list_neg.append(count_list())
 
 # convert count dump data to original count list data
 SeqModule.convert_dump_to_list(ref_count_dump_pos, ref_count_list_pos)
@@ -221,7 +233,7 @@ def precursor_generator(lines):
             count_region = count
             count_sites = count
             for i in range(1, 20):
-                if int(line_split[3])-i < 0 or int(line_split[3])+i >= len(ref_count_list_pos[name_list_index]):
+                if int(line_split[3])-i < 0 or int(line_split[3])+i >= len(ref_seq_list[name_list_index]):
                     continue
                 if ref_count_list_pos[name_list_index][int(line_split[3])-i] > count \
                         or ref_count_list_pos[name_list_index][int(line_split[3])+i] > count:
@@ -242,7 +254,7 @@ def precursor_generator(lines):
             count_region = count
             count_sites = count
             for i in range(1, 20):
-                if int(line_split[4])-i < 0 or int(line_split[4])+i >= len(ref_count_list_neg[name_list_index]):
+                if int(line_split[4])-i < 0 or int(line_split[4])+i >= len(ref_seq_list[name_list_index]):
                     continue
                 if ref_count_list_neg[name_list_index][int(line_split[4])-i] > count \
                         or ref_count_list_neg[name_list_index][int(line_split[4])+i] > count:

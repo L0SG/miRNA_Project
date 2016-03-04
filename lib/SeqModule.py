@@ -256,7 +256,7 @@ def builtin_map_generator(smrna_file, ref_name_list, ref_seq_list,
     if __name__ == '__main__':
         lines = smrna_file.readlines()
         pool = multiprocessing.Pool(processes=NUM_THREADS)
-        numlines = 1000
+        numlines = 5000
         result_list = pool.map(map_generator, (lines[line:line+numlines] for line in xrange(0, len(lines), numlines)))
         output_map_result=[]
         ref_count_list_pos_result=[]
