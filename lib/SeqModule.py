@@ -150,6 +150,8 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
     norm_score = 999
     for i in range(0, len(precursor_db) - mature_min_len):  # search potential -5p seq
         for j in range(mature_min_len, mature_max_len):
+            if i+j >= len(precursor_db):
+                continue
             target_5p = precursor_db[i:i+j]
             if ")" in target_5p:
                 continue
@@ -159,7 +161,11 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
             iter_hairpin = i+j-2
             open_count = 0
             close_count = 0
+            index_error_flag = 0
             while 1:
+                if iter_hairpin == len(precursor_db):
+                    index_error_flag = 1
+                    break
                 if precursor_db[iter_hairpin] == "(":
                     open_count += 1
                     iter_hairpin += 1
@@ -168,6 +174,9 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
                 elif precursor_db[iter_hairpin] == ")":
                     break
             while open_count != close_count:
+                if iter_hairpin == len(precursor_db):
+                    index_error_flag = 1
+                    break
                 if precursor_db[iter_hairpin] == "(":
                     open_count += 1
                     iter_hairpin += 1
@@ -176,6 +185,8 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
                 elif precursor_db[iter_hairpin] == ")":
                     close_count += 1
                     iter_hairpin += 1
+            if index_error_flag == 1:
+                continue
             # iter_hairpin is now the candidate start index of target_3p
             # db of this index could be ".", so keep searching until another ")" appears
             # if ")" appears, this index violates db notations of the precursor
