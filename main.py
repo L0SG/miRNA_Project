@@ -67,8 +67,8 @@ if os.path.exists(os.path.join(path, "map")):
     output_count_neg = open(os.path.join(path, "count_neg"), "r")
     ref_count_dump_pos = cPickle.load(output_count_pos)
     ref_count_dump_neg = cPickle.load(output_count_neg)
-output_precursor = open(os.path.join(path, "result_precursor.txt"), "r")
-output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "r")
+output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
+output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
 
 # variable list
@@ -120,7 +120,7 @@ if args.mincount:
 # internal variables are not expected to be changed by users, but possible if one wants to experiment
 
 ##################################### main script start #####################################
-"""
+
 print("miRNA Discovery Project")
 print("Program by Lee Sang-Gil")
 print("dept. of Applied Biology & Chemistry, Seoul National University")
@@ -437,7 +437,7 @@ while 1:
     output_precursor_collapsed.write(output_precursor.readline())
 output_precursor_collapsed.seek(0, 0)
 print("Collapsing done")
-"""
+
 # load map file to make aligned output
 # 2d list, [i] [0]:name, [1]:readcount, [2]:chr, [3]:mature_start, [4]:mature_end, [5]:pos, [6]:seq
 # [7]: MFE, [8]:norm_MFE, [9]:prec_start, [10]:prec_end
