@@ -200,13 +200,13 @@ class count_list(dict):
 ref_count_list_pos = []
 ref_count_list_neg = []
 for i in range(0, len(ref_seq_list)):
-    ref_count_list_pos.append(count_list())
-    ref_count_list_neg.append(count_list())
-
+    ref_count_list_pos.append(count_list(ref_count_dump_pos[i]))
+    ref_count_list_neg.append(count_list(ref_count_dump_neg[i]))
+"""
 # convert count dump data to original count list data
 SeqModule.convert_dump_to_list(ref_count_dump_pos, ref_count_list_pos)
 SeqModule.convert_dump_to_list(ref_count_dump_neg, ref_count_list_neg)
-
+"""
 # use RNAfold to calculate MFE and select putative precursor
 print("Calculating MFE of putative precursors with RNAfold...")
 
@@ -460,67 +460,89 @@ print("Loading Done")
 # Select Precursors which have valid star seq
 print("Finding valid star sequence for each putative precursor...")
 result_count = 0
-output_precursor_collapsed.readline()  # discard header line
 
-while 1:
-    line_info = output_precursor_collapsed.readline().strip()
-    if line_info == "":
-        break
-    line_seq = output_precursor_collapsed.readline().strip()
-    line_db = output_precursor_collapsed.readline().strip()
 
-    # Discard non-canonical (i.e. "hard to identify") precursor
-    # "Asymmetric" dot-bracket notation precursor : low accuracy, hard to identify star seq, and too many outputs
-    # if ")" portion is large in "left side", it's non-canonical
-    line_db_left = line_db[0:len(line_db)/2]
-    num_open = line_db_left.count("(")
-    num_close = line_db_left.count(")")
-    if float(num_close)/num_open > NON_CANONICAL_PREC_FACTOR:
-        continue
-    # find valid star sequence from putative precursors
-    start_5p, end_5p, start_3p, end_3p = SeqModule.star_identifier_v2(line_db, MATURE_MIN_LEN, MATURE_MAX_LEN,
-                                                                      MAX_SERIAL_MISMATCH, MAX_MULT_MISMATCH,
-                                                                      MAX_SERIAL_BULGE, MAX_MULT_BULGE)
-    if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
-        continue
+def mature_generator(lines):
+    # each loop should read exactly 3 lines
+    output_list=[]
+    iterator = 0
+    while 1:
+        if iterator == len(lines):
+            break
+        line_info = lines[iterator].strip()
+        if line_info == "":
+            break
+        line_seq = lines[iterator+1].strip()
+        line_db = lines[iterator+2].strip()
+        iterator += 3
+        # Discard non-canonical (i.e. "hard to identify") precursor
+        # "Asymmetric" dot-bracket notation precursor : low accuracy, hard to identify star seq, and too many outputs
+        # if ")" portion is large in "left side", it's non-canonical
+        line_db_left = line_db[0:len(line_db)/2]
+        num_open = line_db_left.count("(")
+        num_close = line_db_left.count(")")
+        if float(num_close)/num_open > NON_CANONICAL_PREC_FACTOR:
+            continue
+        # find valid star sequence from putative precursors
+        start_5p, end_5p, start_3p, end_3p = SeqModule.star_identifier_v2(line_db, MATURE_MIN_LEN, MATURE_MAX_LEN,
+                                                                          MAX_SERIAL_MISMATCH, MAX_MULT_MISMATCH,
+                                                                          MAX_SERIAL_BULGE, MAX_MULT_BULGE)
+        if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
+            continue
 
-    # if no read data is matched in putative precursors, discard it
-    if DISCARD_NO_READ_PREC_FLAG:
-        count = 0
+        # if no read data is matched in putative precursors, discard it
+        if DISCARD_NO_READ_PREC_FLAG:
+            count = 0
+            if line_info.split()[5] == "+":
+                for i in range(0, len(map_data)):
+                    if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
+                            and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                        count += 1
+            elif line_info.split()[5] == "-":
+                for i in range(0, len(map_data)):
+                    if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
+                            and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                        count += 1
+            if count == 0:
+                continue
+
+        # write putative precursor to the output file
+        output_form = []
+        output_form.append(str((line_info+"\n"+line_seq+"\n"+line_db+"\n")))
+        output_form.append(str(('*'*start_5p+line_seq[start_5p:end_5p]+'*'*(len(line_seq)-end_5p)+"\n")))
+        output_form.append(str(('*'*start_3p+line_seq[start_3p:end_3p]+'*'*(len(line_seq)-end_3p)+"\n")))
         if line_info.split()[5] == "+":
             for i in range(0, len(map_data)):
                 if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
                         and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
-                    count += 1
+                    output_form.append(str(('-'*(int(map_data[i][3])-int(line_info.split()[9]))+str(map_data[i][6])+
+                                        '-'*(int(line_info.split()[10])-int(map_data[i][4]))+'\t'+
+                                        str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')))
         elif line_info.split()[5] == "-":
             for i in range(0, len(map_data)):
                 if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
                         and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
-                    count += 1
-        if count == 0:
-            continue
+                    output_form.append(str(('-'*(int(line_info.split()[10])-int(map_data[i][4]))+str(map_data[i][6])+
+                                        '-'*(int(map_data[i][3])-int(line_info.split()[9]))+'\t'+
+                                        str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')))
+        output_list.append(output_form)
+    return output_list
 
-    # write putative precursor to the output file
-    result_count += 1
-    output_mature.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")
-    output_mature.write(line_info+"\n"+line_seq+"\n"+line_db+"\n")
-    output_mature.write('*'*start_5p+line_seq[start_5p:end_5p]+'*'*(len(line_seq)-end_5p)+"\n")
-    output_mature.write('*'*start_3p+line_seq[start_3p:end_3p]+'*'*(len(line_seq)-end_3p)+"\n")
-    if line_info.split()[5] == "+":
-        for i in range(0, len(map_data)):
-            if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
-                    and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
-                output_mature.write('-'*(int(map_data[i][3])-int(line_info.split()[9]))+str(map_data[i][6])+
-                                    '-'*(int(line_info.split()[10])-int(map_data[i][4]))+'\t'+
-                                    str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')
-    elif line_info.split()[5] == "-":
-        for i in range(0, len(map_data)):
-            if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
-                    and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
-                output_mature.write('-'*(int(line_info.split()[10])-int(map_data[i][4]))+str(map_data[i][6])+
-                                    '-'*(int(map_data[i][3])-int(line_info.split()[9]))+'\t'+
-                                    str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')
-    output_mature.write("\n")
-print("Done : "+str(result_count)+" miRNA found, See result_mature.txt for details")
+if __name__ == '__main__':
+    lines = output_precursor_collapsed.readlines()
+    # discard header line
+    lines = lines[1:]
+    pool2 = multiprocessing.Pool(processes=NUM_THREADS)
+    # numlines MUST be 3*x form
+    numlines = 3*100
+    output_list = pool2.map(mature_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
+    output_list = filter(None, output_list)
+    for i in output_list:
+        output_mature.write(str(("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")))
+        for j in i:
+            for k in j:
+                output_mature.write(str(k))
+        output_mature.write("\n")
+print("Done : "+str(len(output_list))+" miRNA found, See result_mature.txt for details")
 
 ##################################### main script end #####################################
