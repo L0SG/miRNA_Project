@@ -157,6 +157,7 @@ else:
 if os.path.exists(os.path.join(path, "map")):
     print("map file detected, skipping map generation...")
 else:
+    start = time.time()
     output_map = open(os.path.join(path, "map"), "w+")
     output_count_pos = open(os.path.join(path, "count_pos"), "w+")
     output_count_neg = open(os.path.join(path, "count_neg"), "w+")
@@ -191,6 +192,8 @@ else:
     output_count_pos.seek(0, 0)
     output_count_neg.seek(0, 0)
     print("mapping Done")
+    end = time.time()
+    print("elapsed time for mapping : "+str(end-start)+" seconds")
 
 
 # generate count list
@@ -389,6 +392,7 @@ output_precursor.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPo
 
 # precursor generator multiprocessing procedure
 if __name__ == '__main__':
+    start = time.time()
     lines = output_map.readlines()
     pool = multiprocessing.Pool(processes=NUM_THREADS)
     numlines = 500
@@ -403,6 +407,8 @@ if __name__ == '__main__':
         output_precursor.write(output_precursor_db_result[i])
 output_precursor.seek(0, 0)
 print("Calculating Done")
+end = time.time()
+print("elapsed time for RNAfold : "+str(end-start)+" seconds")
 
 # collapse duplicate precursors
 # if either start index or end index of the two precursors are "slightly" different, they're assumed to the duplicate
@@ -525,13 +531,15 @@ def mature_generator(lines):
         output_list.append(output_form)
     return output_list
 
+# mature generator multiprocessing procedure
 if __name__ == '__main__':
+    start = time.time()
     lines = output_precursor_collapsed.readlines()
     # discard header line
     lines = lines[1:]
     pool2 = multiprocessing.Pool(processes=NUM_THREADS)
-    # numlines MUST be 3*x form
-    numlines = 3*100
+    # numlines MUST be 3
+    numlines = 3
     output_list = pool2.map(mature_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
     output_list = filter(None, output_list)
     for i in output_list:
@@ -541,5 +549,8 @@ if __name__ == '__main__':
                 output_mature.write(str(k))
         output_mature.write("\n")
 print("Done : "+str(len(output_list))+" miRNA found, See result_mature.txt for details")
+end = time.time()
+print("elapsed time for calculating mature miRNA info : "+str(end-start)+" seconds")
+
 
 ##################################### main script end #####################################
