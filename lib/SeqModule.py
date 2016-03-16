@@ -78,11 +78,7 @@ def count_generator(ref_name_list, output_map):
     return count_list_pos, count_list_neg
 
 
-def convert_dump_to_list(ref_count_dump, ref_count_list):
-    for i in xrange(0, len(ref_count_dump)):
-        for j in ref_count_dump[i]:
-            value = ref_count_dump[i][j]
-            ref_count_list[i][j] += value
+
 
 def score_seq(target_5p, target_3p):
     i_5p = 0

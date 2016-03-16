@@ -1,4 +1,10 @@
 # outdated and not used functions
+def convert_dump_to_list(ref_count_dump, ref_count_list):
+    for i in xrange(0, len(ref_count_dump)):
+        for j in ref_count_dump[i]:
+            value = ref_count_dump[i][j]
+            ref_count_list[i][j] += value
+
 
 def star_identifier(target_star_seq, search_seq, target_ref_seq):
     if target_star_seq == search_seq:

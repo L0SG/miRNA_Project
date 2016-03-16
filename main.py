@@ -7,6 +7,7 @@ import os
 import operator
 import argparse
 import cPickle
+import time
 
 here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
@@ -202,11 +203,7 @@ ref_count_list_neg = []
 for i in range(0, len(ref_seq_list)):
     ref_count_list_pos.append(count_list(ref_count_dump_pos[i]))
     ref_count_list_neg.append(count_list(ref_count_dump_neg[i]))
-"""
-# convert count dump data to original count list data
-SeqModule.convert_dump_to_list(ref_count_dump_pos, ref_count_list_pos)
-SeqModule.convert_dump_to_list(ref_count_dump_neg, ref_count_list_neg)
-"""
+
 # use RNAfold to calculate MFE and select putative precursor
 print("Calculating MFE of putative precursors with RNAfold...")
 
