@@ -1,5 +1,6 @@
 from lib import FileIOModule
 from lib import SeqModule
+from collections import Counter, OrderedDict
 import subprocess
 import re
 import multiprocessing
@@ -8,6 +9,7 @@ import operator
 import argparse
 import cPickle
 import time
+from matplotlib import pyplot
 
 here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
@@ -71,6 +73,8 @@ if os.path.exists(os.path.join(path, "map")):
 output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
 output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
+output_distribution = open(os.path.join(path, "result_length_distribution.txt"), "w+")
+output_tabular = open(os.path.join(path, "result_tabular_format.txt"), "w+")
 
 # variable list
 NUM_THREADS = 12
@@ -139,8 +143,7 @@ else:
     # genarate map file using bowtie
 
     # generate bowtie index
-    # index files are saved to current working directory
-    # i.e. the directory where the main script is running
+    # index files are saved to the same path where the reference file is stored
     if args.reference:
         ref_file_path = args.reference
     else:
@@ -214,12 +217,24 @@ print("Calculating MFE of putative precursors with RNAfold...")
 def precursor_generator(lines):
     output_precursor_infolist = []
     output_precursor_dblist = []
+    reads_total_partial = 0
+    length_distribution_partial = count_list({})
 
     for z in range(0, len(lines)):
         line_split = lines[z].split()
         # Rare occasion of improper line data : should skip it
         if len(line_split) != 7:
             continue
+        # accumulate raw rna seq read counts for calculation of RPM
+        reads_total_partial += int(line_split[1])
+
+        # accumulate length distribution imformation
+        # specify 5' end and add to the corresponding index
+        seq_dist_check = line_split[6]
+        five_prime = seq_dist_check[0]
+        seq_length = len(seq_dist_check)
+        dict_key = str(seq_length)+str(five_prime)
+        length_distribution_partial[dict_key] += int(line_split[1])
 
         # Screen for Drosha / Dicer cutting sites (Inspired by miREAP)
         qualified_flag = 1
@@ -385,7 +400,9 @@ def precursor_generator(lines):
                                              str(pc_start)+"\t"+str(pc_end)+"\n")
             output_precursor_dblist.append(pc_seq+"\n"+pc_structure+"\n")
             continue
-    return output_precursor_infolist, output_precursor_dblist
+    # create counters (subclass of dict) to "merge" partial length distribution dicts later
+    length_distribution_counter = Counter(length_distribution_partial)
+    return output_precursor_infolist, output_precursor_dblist, reads_total_partial, length_distribution_counter
 
 # precursor output file header
 output_precursor.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")
@@ -397,11 +414,17 @@ if __name__ == '__main__':
     pool = multiprocessing.Pool(processes=NUM_THREADS)
     numlines = 500
     result_list = pool.map(precursor_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
+
+    # merging procedure
     output_precursor_info_result = []
     output_precursor_db_result = []
+    reads_total = 0
+    length_distribution = Counter({})
     for i in range(0, len(result_list)):
         output_precursor_info_result += result_list[i][0]
         output_precursor_db_result += result_list[i][1]
+        reads_total += result_list[i][2]
+        length_distribution += result_list[i][3]
     for i in range(0, len(output_precursor_info_result)): # len of info_result, db_result must be same
         output_precursor.write(output_precursor_info_result[i])
         output_precursor.write(output_precursor_db_result[i])
@@ -541,13 +564,54 @@ if __name__ == '__main__':
     # numlines MUST be 3
     numlines = 3
     output_list = pool2.map(mature_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
+    # filter out empty elements
     output_list = filter(None, output_list)
+
+    # result_mature.txt generation
     for i in output_list:
         output_mature.write(str(("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")))
         for j in i:
             for k in j:
                 output_mature.write(str(k))
         output_mature.write("\n")
+
+    # result_tabular.txt generation
+    output_tabular.write("ID\treads\tRPM\tChromosome\tStart\tEnd\tStrand\tSeq\n")
+    for i in output_list:
+        info = i[0][0].split()
+        ID = str(info[0])
+        reads = str(info[1])
+        RPM = str(float(info[1])/float(reads_total)*1000000)
+        chromosome = str(info[2])
+        seq_start = str(info[3])
+        seq_end = str(info[4])
+        strand = str(info[5])
+        seq = str(info[6])
+        output_tabular.write(ID+'\t'+reads+'\t'+RPM+'\t'+chromosome+
+                             '\t'+seq_start+'\t'+seq_end+'\t'+strand+'\t'+seq+'\n')
+
+    # result_distribution.txt generation
+    length_list = length_distribution.items()
+    length_list.sort(key=lambda tup: tup[0])
+    length_key = [i[0] for i in length_list]
+    length_value = [int(i[1]) for i in length_list]
+    length_value_RPM = [float(i)/float(reads_total)*1000000 for i in length_value]
+    for key in length_key:
+        output_distribution.write(str(key)+'\t')
+    output_distribution.write('\n')
+    for value in length_value:
+        output_distribution.write(str(value)+'\t')
+    output_distribution.write('\n')
+    for value in length_value_RPM:
+        output_distribution.write(str(value)+'\t')
+    output_distribution.write('\n')
+
+    # simple bar plot generation
+    pyplot.bar(xrange(0, len(length_key)), length_value)
+    pyplot.xticks(xrange(0, len(length_key)), length_key, rotation='vertical', size='small', ha='left')
+    pyplot.autoscale()
+    pyplot.savefig(os.path.join(path, "length_distribution.png"), format='png')
+
 print("Done : "+str(len(output_list))+" miRNA found, See result_mature.txt for details")
 end = time.time()
 print("elapsed time for calculating mature miRNA info : "+str(end-start)+" seconds")
