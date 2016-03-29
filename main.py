@@ -408,6 +408,14 @@ def precursor_generator(lines):
     length_distribution_counter = Counter(length_distribution_partial)
     return output_precursor_infolist, output_precursor_dblist, reads_total_partial, length_distribution_counter
 
+
+# wrapper function for progress monitoring
+def precursor_generator_wrapper(arguments):
+    input_original, q = arguments
+    result = precursor_generator(input_original)
+    q.put(result)
+    return result
+
 # precursor output file header
 output_precursor.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")
 
@@ -416,19 +424,23 @@ if __name__ == '__main__':
     start = time.time()
     lines = output_map.readlines()
     pool = multiprocessing.Pool(processes=NUM_THREADS)
+    manager = multiprocessing.Manager()
+    queue = manager.Queue()
     numlines = 500
     num_chunk = len(lines)/numlines
-    result_list = pool.map_async(precursor_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
-    pool.close()
+    args = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
+
+    result_list = pool.map_async(precursor_generator_wrapper, args)
     while True:
         if result_list.ready():
+            sys.stdout.write('\r%% of map data processed : %.2f %%' % 100)
+            print (' done')
             break
-        remaining = result_list._number_left
-        sys.stdout.write('\r%% of map data processing : %.2f %%' % ((1-float(remaining)/num_chunk)*100))
-        time.sleep(0.5)
-    pool.join()
+        size = queue.qsize()
+        sys.stdout.write('\r%% of map data processed : %.2f %%' % (float(size)/float(num_chunk)*100))
+        time.sleep(0.1)
     result_list = result_list.get()
-    print (' done')
+
     # merging procedure
     output_precursor_info_result = []
     output_precursor_db_result = []
@@ -568,6 +580,14 @@ def mature_generator(lines):
         output_list.append(output_form)
     return output_list
 
+
+# wrapper function for progress monitoring
+def mature_generator_wrapper(arguments):
+    input_original, q = arguments
+    result = mature_generator(input_original)
+    q.put(result)
+    return result
+
 # mature generator multiprocessing procedure
 if __name__ == '__main__':
     start = time.time()
@@ -575,20 +595,23 @@ if __name__ == '__main__':
     # discard header line
     lines = lines[1:]
     pool2 = multiprocessing.Pool(processes=NUM_THREADS)
+    manager2 = multiprocessing.Manager()
+    queue2 = manager.Queue()
     # numlines MUST be 3
     numlines = 3
     num_chunk = len(lines)/numlines
-    output_list = pool2.map_async(mature_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
-    pool2.close()
+    args = [(lines[line:line+numlines], queue2) for line in range(0, len(lines), numlines)]
+
+    output_list = pool2.map_async(mature_generator_wrapper, args)
     while True:
         if output_list.ready():
+            sys.stdout.write('\r%% of precursor data processed : %.2f %%' % 100)
+            print (' done')
             break
-        remaining = output_list._number_left
-        sys.stdout.write('\r%% of precursor data processing : %.2f %%' % ((1 - float(remaining) / num_chunk) * 100))
-        time.sleep(0.5)
-    pool2.join()
+        size = queue.qsize()
+        sys.stdout.write('\r%% of precursor data processed : %.2f %%' % (float(size) / float(num_chunk) * 100))
+        time.sleep(0.1)
     output_list = output_list.get()
-    print (' done')
     # filter out empty elements
     output_list = filter(None, output_list)
 
