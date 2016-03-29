@@ -9,6 +9,7 @@ import operator
 import argparse
 import cPickle
 import time
+import sys
 
 here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
@@ -416,8 +417,18 @@ if __name__ == '__main__':
     lines = output_map.readlines()
     pool = multiprocessing.Pool(processes=NUM_THREADS)
     numlines = 500
-    result_list = pool.map(precursor_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
-
+    num_chunk = len(lines)/numlines
+    result_list = pool.map_async(precursor_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
+    pool.close()
+    while True:
+        if result_list.ready():
+            break
+        remaining = result_list._number_left
+        sys.stdout.write('\r%% of map data processing : %.2f %%' % ((1-float(remaining)/num_chunk)*100))
+        time.sleep(0.5)
+    pool.join()
+    result_list = result_list.get()
+    print (' done')
     # merging procedure
     output_precursor_info_result = []
     output_precursor_db_result = []
@@ -432,7 +443,7 @@ if __name__ == '__main__':
         output_precursor.write(output_precursor_info_result[i])
         output_precursor.write(output_precursor_db_result[i])
 output_precursor.seek(0, 0)
-print("Calculating Done")
+print("Precursor generation done")
 end = time.time()
 print("elapsed time for RNAfold : "+str(end-start)+" seconds")
 
@@ -566,7 +577,18 @@ if __name__ == '__main__':
     pool2 = multiprocessing.Pool(processes=NUM_THREADS)
     # numlines MUST be 3
     numlines = 3
-    output_list = pool2.map(mature_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
+    num_chunk = len(lines)
+    output_list = pool2.map_async(mature_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
+    pool2.close()
+    while True:
+        if output_list.ready():
+            break
+        remaining = output_list._number_left
+        sys.stdout.write('\r%% of precursor data processing : %.2f %%' % ((1 - float(remaining) / num_chunk) * 100))
+        time.sleep(0.5)
+    pool2.join()
+    output_list = output_list.get()
+    print (' done')
     # filter out empty elements
     output_list = filter(None, output_list)
 
