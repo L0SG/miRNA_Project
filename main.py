@@ -65,6 +65,8 @@ else:
 # output file list
 if args.output:
     path = args.output
+    if not os.path.exists(path):
+        os.mkdir(path)
 if os.path.exists(os.path.join(path, "map")):
     output_map = open(os.path.join(path, "map"), "r")
     output_count_pos = open(os.path.join(path, "count_pos"), "r")
@@ -140,9 +142,8 @@ ref_name_list, ref_seq_list = FileIOModule.create_ref_seq(ref_file)
 
 
 # check whether index file was generated before
-print(os.path.join(os.getcwd(), str(ref_file.name)+".1.ebwt"))
 if os.path.exists(os.path.join(os.getcwd(), str(ref_file.name)+".1.ebwt")):
-    print("index file detected, skipping index generation...")
+    print("Index file detected, skipping index generation...")
 else:
     # genarate map file using bowtie
 
@@ -180,7 +181,7 @@ else:
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     bowtie.wait()
 
-    print("converting bowtie map format to correct map format...")
+    print("Converting bowtie map format to correct map format...")
     # open bowtie-generated map file (read-only, no need to be changed)
     output_bowtie = open(os.path.join(path, "map_bowtie"), "r")
 
@@ -188,7 +189,7 @@ else:
     SeqModule.convert_bowtie_output(output_bowtie, output_map)
     output_map.seek(0, 0)
 
-    print("generating count data using map file...")
+    print("Generating count data using map file...")
     # generate count data using map file
     ref_count_dump_pos, ref_count_dump_neg = SeqModule.count_generator(ref_name_list, output_map)
     output_map.seek(0, 0)
@@ -198,13 +199,14 @@ else:
     cPickle.dump(ref_count_dump_neg, output_count_neg, -1)
     output_count_pos.seek(0, 0)
     output_count_neg.seek(0, 0)
-    print("mapping Done")
     end = time.time()
-    print("elapsed time for mapping : "+str(end-start)+" seconds")
+    print("Elapsed time for mapping : " + str(end - start) + " seconds")
+    print("Mapping done")
+
 
 
 # generate count list
-print("generating read count information list...")
+print("Generating read count information list...")
 class count_list(dict):
     def __missing__(self, key):
         return 0
@@ -413,7 +415,7 @@ def precursor_generator(lines):
 def precursor_generator_wrapper(arguments):
     input_original, q = arguments
     result = precursor_generator(input_original)
-    q.put(result)
+    q.put(0)
     return result
 
 # precursor output file header
@@ -455,9 +457,9 @@ if __name__ == '__main__':
         output_precursor.write(output_precursor_info_result[i])
         output_precursor.write(output_precursor_db_result[i])
 output_precursor.seek(0, 0)
-print("Precursor generation done")
 end = time.time()
-print("elapsed time for RNAfold : "+str(end-start)+" seconds")
+print("Elapsed time for RNAfold : "+str(end-start)+" seconds")
+print("Precursor generation done")
 
 # collapse duplicate precursors
 # if either start index or end index of the two precursors are "slightly" different, they're assumed to the duplicate
@@ -506,7 +508,7 @@ while 1:
     if line_split[1] >= MIN_READ_COUNT_THRESHOLD:
         map_data.append(line_split)
 map_data = sorted(map_data, key=operator.itemgetter(3))
-print("Loading Done")
+print("Loading done")
 
 
 # Select Precursors which have valid star seq
@@ -585,7 +587,7 @@ def mature_generator(lines):
 def mature_generator_wrapper(arguments):
     input_original, q = arguments
     result = mature_generator(input_original)
-    q.put(result)
+    q.put(0)
     return result
 
 # mature generator multiprocessing procedure
@@ -661,9 +663,13 @@ if __name__ == '__main__':
         pyplot.autoscale()
         pyplot.savefig(os.path.join(path, "length_distribution.png"), format='png')
 
-print("Done : "+str(len(output_list))+" miRNA found, See result_mature.txt for details")
 end = time.time()
-print("elapsed time for calculating mature miRNA info : "+str(end-start)+" seconds")
+print("Elapsed time for calculating mature miRNA info : "+str(end-start)+" seconds")
+print("\nDone : "+str(len(output_list))+" miRNA found")
+print("Results are generated at : "+str(path))
+print("See result_mature.txt for detailed alignment information")
+print("See result_tabular_format.txt for simplified tabular format of miRNA candidates")
+print("See result_length_distribution.txt for length distribution of genome-mapped RNA-seq reads")
 
 
 ##################################### main script end #####################################
