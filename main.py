@@ -9,7 +9,6 @@ import operator
 import argparse
 import cPickle
 import time
-from matplotlib import pyplot
 
 here = os.path.abspath(os.path.dirname(__file__))
 subdir = "result"
@@ -37,6 +36,7 @@ parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor 
 parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend loop (default : 2)", type=int)
 parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor (default : 18)", type=int)
 parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq displayed at results (default : 2)", type=int)
+parser.add_argument("--plot", help="draw simple bar plot of length distribution of genome-aligned RNA sequence, need matplotlib to be installed (default:false)")
 args = parser.parse_args()
 
 # input file list
@@ -94,6 +94,7 @@ DUPLICATE_FILTER_THRESHOLD = 10
 DOMINANT_FACTOR = 0.9
 NON_CANONICAL_PREC_FACTOR = 0.01   # smaller value makes it more "canonical"
 DISCARD_NO_READ_PREC_FLAG = 1
+plot_flag = 'false'
 
 if args.thread:
     NUM_THREADS = args.thread
@@ -121,6 +122,8 @@ if args.mfe:
     MIN_ABS_MFE = args.mfe
 if args.mincount:
     MIN_READ_COUNT_THRESHOLD = args.mincount
+if args.plot == 'true' or 'True':
+    plot_flag = args.plot
 # DUPLICATE_FILTER_THRESHOLD, DOMINANT_FACTOR, NON_CANONICAL_PREC_FACTOR are internal variables
 # internal variables are not expected to be changed by users, but possible if one wants to experiment
 
@@ -605,12 +608,13 @@ if __name__ == '__main__':
     for value in length_value_RPM:
         output_distribution.write(str(value)+'\t')
     output_distribution.write('\n')
-
-    # simple bar plot generation
-    pyplot.bar(xrange(0, len(length_key)), length_value)
-    pyplot.xticks(xrange(0, len(length_key)), length_key, rotation='vertical', size='small', ha='left')
-    pyplot.autoscale()
-    pyplot.savefig(os.path.join(path, "length_distribution.png"), format='png')
+    if plot_flag == 'true' or 'True':
+        from matplotlib import pyplot
+        # simple bar plot generation
+        pyplot.bar(xrange(0, len(length_key)), length_value)
+        pyplot.xticks(xrange(0, len(length_key)), length_key, rotation='vertical', size='small', ha='left')
+        pyplot.autoscale()
+        pyplot.savefig(os.path.join(path, "length_distribution.png"), format='png')
 
 print("Done : "+str(len(output_list))+" miRNA found, See result_mature.txt for details")
 end = time.time()
