@@ -577,7 +577,7 @@ if __name__ == '__main__':
     pool2 = multiprocessing.Pool(processes=NUM_THREADS)
     # numlines MUST be 3
     numlines = 3
-    num_chunk = len(lines)
+    num_chunk = len(lines)/numlines
     output_list = pool2.map_async(mature_generator, (lines[line:line+numlines] for line in range(0, len(lines), numlines)))
     pool2.close()
     while True:
