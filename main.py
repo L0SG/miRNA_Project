@@ -36,8 +36,9 @@ parser.add_argument("-d", "--distance", help="max. distance between miRNA-miRNA*
 parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor from mature miRNA(miRNA*) (default : 10)", type=int)
 parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend loop (default : 2)", type=int)
 parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor (default : 18)", type=int)
-parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq displayed at results (default : 2)", type=int)
+parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq used for mature miRNA finding (default : 2)", type=int)
 parser.add_argument("--plot", help="draw simple bar plot of length distribution of genome-aligned RNA sequence, need matplotlib to be installed (default:false)")
+
 args = parser.parse_args()
 
 # input file list
@@ -58,7 +59,7 @@ else:
 
 # RNAfold path
 if args.RNAfoldpath:
-    RNAfold_path = args.RNAfoldpath
+    RNAfold_path = os.path.join(args.RNAfoldpath, 'RNAfold')
 else:
     RNAfold_path = "RNAfold"
 
@@ -92,7 +93,7 @@ DISTANCE_THRESHOLD = 35
 ARM_EXTEND_THRESHOLD = 10
 RNAFOLD_STEP = 2
 MIN_ABS_MFE = 18
-MIN_READ_COUNT_THRESHOLD = 20
+MIN_READ_COUNT_THRESHOLD = 2
 DUPLICATE_FILTER_THRESHOLD = 10
 DOMINANT_FACTOR = 0.9
 NON_CANONICAL_PREC_FACTOR = 0.01   # smaller value makes it more "canonical"
@@ -218,6 +219,7 @@ for i in range(0, len(ref_seq_list)):
     ref_count_list_neg.append(count_list(ref_count_dump_neg[i]))
 
 # use RNAfold to calculate MFE and select putative precursor
+print("\n########## pre-miRNA discovery started ##########")
 print("Calculating MFE of putative precursors with RNAfold...")
 
 
@@ -432,19 +434,19 @@ if __name__ == '__main__':
     # split original map data to multiple lists for efficient multiprocessing
     numlines = 500
     num_chunk = len(lines)/numlines
-    args = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
+    arguments = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
 
-    # transform args to batches for memory usage suppression
+    # transform arguments to batches for memory usage suppression
     # optimal batch size is probably dependent on the system
     batch_size = BATCH_SIZE
-    args = [args[i:i+batch_size] for i in range(0, len(args), batch_size)]
+    arguments = [arguments[i:i+batch_size] for i in range(0, len(arguments), batch_size)]
 
     # apply multiprocessing, one batch at a time
     # closing pool and extending partial result to original result suppresses memory usage
     result_list = []
-    for args_partial in args:
+    for arguments_partial in arguments:
         pool = multiprocessing.Pool(processes=NUM_THREADS)
-        result_list_partial = pool.map_async(precursor_generator_wrapper, args_partial)
+        result_list_partial = pool.map_async(precursor_generator_wrapper, arguments_partial)
         while True:
             if result_list_partial.ready():
                 break
@@ -505,6 +507,21 @@ while 1:
     output_precursor_collapsed.write(output_precursor.readline())
 output_precursor_collapsed.seek(0, 0)
 print("Collapsing done")
+print("########## pre-miRNA discovery complete ##########")
+
+print("\n########## mature miRNA-miRNA* duplex calculation started ##########")
+if not args.mincount:
+    print("min. readcount threshold parameter (-c --mincount) not set, starting automatic read suppression...")
+    print("checking smrna file size...")
+    for i, l in enumerate(smrna_file):
+        pass
+    smrna_file_length = (i+1)/2
+    smrna_file.seek(0, 0)
+    print("Total number of unique smrna reads : " + str(smrna_file_length))
+    MIN_READ_COUNT_THRESHOLD = smrna_file_length/500000 + 1
+    print("min. readcount threshold automatically set to " + str(MIN_READ_COUNT_THRESHOLD))
+    print("Mapped reads with count lower than " + str(MIN_READ_COUNT_THRESHOLD) +
+          " will not be used for further processing")
 
 # load map file to make aligned output
 # 2d list, [i] [0]:name, [1]:readcount, [2]:chr, [3]:mature_start, [4]:mature_end, [5]:pos, [6]:seq
@@ -517,9 +534,9 @@ while 1:
     line_split = output_map.readline().strip().split()
     if line_split == []:
         break
-    # if read count is below mininum read count threshold, discard it
+    # if read count is below minimum read count threshold, discard it
     # otherwise there are too many sites to search
-    if line_split[1] >= MIN_READ_COUNT_THRESHOLD:
+    if int(line_split[1]) >= MIN_READ_COUNT_THRESHOLD:
         map_data.append(line_split)
 map_data = sorted(map_data, key=operator.itemgetter(3))
 print("Loading done")
@@ -531,6 +548,7 @@ result_count = 0
 
 
 def mature_generator(lines):
+    global map_data
     # each loop should read exactly 3 lines
     output_list=[]
     iterator = 0
@@ -557,19 +575,19 @@ def mature_generator(lines):
                                                                           MAX_SERIAL_BULGE, MAX_MULT_BULGE)
         if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
             continue
-
+        
         # if no read data is matched in putative precursors, discard it
         if DISCARD_NO_READ_PREC_FLAG:
             count = 0
             if line_info.split()[5] == "+":
                 for i in range(0, len(map_data)):
-                    if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
-                            and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                    if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
+                            and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
                         count += 1
             elif line_info.split()[5] == "-":
                 for i in range(0, len(map_data)):
-                    if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
-                            and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                    if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
+                            and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
                         count += 1
             if count == 0:
                 continue
@@ -581,15 +599,15 @@ def mature_generator(lines):
         output_form.append(str(('*'*start_3p+line_seq[start_3p:end_3p]+'*'*(len(line_seq)-end_3p)+"\n")))
         if line_info.split()[5] == "+":
             for i in range(0, len(map_data)):
-                if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
-                        and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
+                        and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
                     output_form.append(str(('-'*(int(map_data[i][3])-int(line_info.split()[9]))+str(map_data[i][6])+
                                         '-'*(int(line_info.split()[10])-int(map_data[i][4]))+'\t'+
                                         str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')))
         elif line_info.split()[5] == "-":
             for i in range(0, len(map_data)):
-                if map_data[i][2] == line_info.split()[2] and int(map_data[i][3]) >= int(line_info.split()[9])\
-                        and int(map_data[i][4]) <= int(line_info.split()[10]) and int(map_data[i][1]) >= MIN_READ_COUNT_THRESHOLD:
+                if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
+                        and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
                     output_form.append(str(('-'*(int(line_info.split()[10])-int(map_data[i][4]))+str(map_data[i][6])+
                                         '-'*(int(map_data[i][3])-int(line_info.split()[9]))+'\t'+
                                         str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')))
@@ -615,19 +633,19 @@ if __name__ == '__main__':
     # numlines MUST be 3
     numlines = 3
     num_chunk = len(lines)/numlines
-    args = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
+    arguments = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
 
-    # transform args to batches for memory usage suppression
+    # transform arguments to batches for memory usage suppression
     # optimal batch size is probably dependent on the system
-    batch_size = BATCH_SIZE
-    args = [args[i:i + batch_size] for i in range(0, len(args), batch_size)]
+    batch_size = BATCH_SIZE*300
+    arguments = [arguments[i:i + batch_size] for i in range(0, len(arguments), batch_size)]
 
     # apply multiprocessing, one batch at a time
     # closing pool and extending partial result to original result suppresses memory usage
     output_list = []
-    for args_partial in args:
+    for arguments_partial in arguments:
         pool = multiprocessing.Pool(processes=NUM_THREADS)
-        output_list_partial = pool.map_async(mature_generator_wrapper, args_partial)
+        output_list_partial = pool.map_async(mature_generator_wrapper, arguments_partial)
         while True:
             if output_list_partial.ready():
                 break
@@ -688,6 +706,7 @@ if __name__ == '__main__':
 
 end = time.time()
 print("Elapsed time for calculating mature miRNA info : "+str(end-start)+" seconds")
+print("########## mature miRNA-miRNA* duplex calculation complete ##########")
 print("\nDone : "+str(len(output_list))+" miRNA found")
 print("Results are generated at : "+str(path))
 print("See result_mature.txt for detailed alignment information")
