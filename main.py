@@ -206,9 +206,10 @@ else:
     print("Mapping done")
 
 
-
 # generate count list
 print("Generating read count information list...")
+
+
 class count_list(dict):
     def __missing__(self, key):
         return 0
@@ -415,8 +416,8 @@ def precursor_generator(lines):
 
 
 # wrapper function for progress monitoring
-def precursor_generator_wrapper(arguments):
-    input_original, q = arguments
+def precursor_generator_wrapper(args_):
+    input_original, q = args_
     result = precursor_generator(input_original)
     q.put(0)
     return result
@@ -616,8 +617,8 @@ def mature_generator(lines):
 
 
 # wrapper function for progress monitoring
-def mature_generator_wrapper(arguments):
-    input_original, q = arguments
+def mature_generator_wrapper(args_):
+    input_original, q = args_
     result = mature_generator(input_original)
     q.put(0)
     return result
