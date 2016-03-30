@@ -428,20 +428,30 @@ if __name__ == '__main__':
     pool = multiprocessing.Pool(processes=NUM_THREADS)
     manager = multiprocessing.Manager()
     queue = manager.Queue()
+
+    # split original map data to multiple lists for efficient multiprocessing
     numlines = 500
     num_chunk = len(lines)/numlines
     args = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
 
-    result_list = pool.map_async(precursor_generator_wrapper, args)
-    while True:
-        if result_list.ready():
-            sys.stdout.write('\r%% of map data processed : %.2f %%' % 100)
-            print (' done')
-            break
-        size = queue.qsize()
-        sys.stdout.write('\r%% of map data processed : %.2f %%' % (float(size)/float(num_chunk)*100))
-        time.sleep(0.1)
-    result_list = result_list.get()
+    # transform args to batches for memory usage suppression
+    batch_size = NUM_THREADS
+    args = [args[i:i+batch_size] for i in range(0, len(args), batch_size)]
+
+    # apply multiprocessing, one batch at a time
+    # closing pool and extending partial result to original result suppresses memory usage
+    result_list = []
+    for args_partial in args:
+        result_list_partial = pool.map_async(precursor_generator_wrapper, args_partial)
+        while True:
+            if result_list_partial.ready():
+                break
+            size = queue.qsize()
+            sys.stdout.write('\r%% of map data processed : %.2f %%' % (float(size)/float(num_chunk)*100))
+            time.sleep(0.1)
+        result_list.extend(result_list_partial.get())
+    sys.stdout.write('\r%% of map data processed : %.2f %%' % 100)
+    print (' done')
 
     # merging procedure
     output_precursor_info_result = []
@@ -596,15 +606,15 @@ if __name__ == '__main__':
     lines = output_precursor_collapsed.readlines()
     # discard header line
     lines = lines[1:]
-    pool2 = multiprocessing.Pool(processes=NUM_THREADS)
-    manager2 = multiprocessing.Manager()
-    queue2 = manager.Queue()
+    pool = multiprocessing.Pool(processes=NUM_THREADS)
+    manager = multiprocessing.Manager()
+    queue = manager.Queue()
     # numlines MUST be 3
     numlines = 3
     num_chunk = len(lines)/numlines
-    args = [(lines[line:line+numlines], queue2) for line in range(0, len(lines), numlines)]
+    args = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
 
-    output_list = pool2.map_async(mature_generator_wrapper, args)
+    output_list = pool.map_async(mature_generator_wrapper, args)
     while True:
         if output_list.ready():
             sys.stdout.write('\r%% of precursor data processed : %.2f %%' % 100)
