@@ -98,7 +98,7 @@ DOMINANT_FACTOR = 0.9
 NON_CANONICAL_PREC_FACTOR = 0.01   # smaller value makes it more "canonical"
 DISCARD_NO_READ_PREC_FLAG = 1
 PLOT_FLAG = 'false'
-BATCH_SIZE = NUM_THREADS * 10
+BATCH_SIZE = NUM_THREADS*3
 
 if args.thread:
     NUM_THREADS = args.thread
@@ -426,7 +426,6 @@ output_precursor.write("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPo
 if __name__ == '__main__':
     start = time.time()
     lines = output_map.readlines()
-    pool = multiprocessing.Pool(processes=NUM_THREADS)
     manager = multiprocessing.Manager()
     queue = manager.Queue()
 
@@ -444,6 +443,7 @@ if __name__ == '__main__':
     # closing pool and extending partial result to original result suppresses memory usage
     result_list = []
     for args_partial in args:
+        pool = multiprocessing.Pool(processes=NUM_THREADS)
         result_list_partial = pool.map_async(precursor_generator_wrapper, args_partial)
         while True:
             if result_list_partial.ready():
@@ -452,6 +452,8 @@ if __name__ == '__main__':
             sys.stdout.write('\r%% of map data processed : %.2f %%' % (float(size)/float(num_chunk)*100))
             time.sleep(0.1)
         result_list.extend(result_list_partial.get())
+        pool.close()
+        pool.join()
     sys.stdout.write('\r%% of map data processed : %.2f %%' % 100)
     print (' done')
 
@@ -608,7 +610,6 @@ if __name__ == '__main__':
     lines = output_precursor_collapsed.readlines()
     # discard header line
     lines = lines[1:]
-    pool = multiprocessing.Pool(processes=NUM_THREADS)
     manager = multiprocessing.Manager()
     queue = manager.Queue()
     # numlines MUST be 3
@@ -625,6 +626,7 @@ if __name__ == '__main__':
     # closing pool and extending partial result to original result suppresses memory usage
     output_list = []
     for args_partial in args:
+        pool = multiprocessing.Pool(processes=NUM_THREADS)
         output_list_partial = pool.map_async(mature_generator_wrapper, args_partial)
         while True:
             if output_list_partial.ready():
@@ -633,6 +635,8 @@ if __name__ == '__main__':
             sys.stdout.write('\r%% of precursor data processed : %.2f %%' % (float(size) / float(num_chunk) * 100))
             time.sleep(0.1)
         output_list.extend(filter(None, output_list_partial.get()))
+        pool.close()
+        pool.join()
     sys.stdout.write('\r%% of precursor data processed : %.2f %%' % 100)
     print (' done')
 
