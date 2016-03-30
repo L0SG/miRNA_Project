@@ -97,7 +97,8 @@ DUPLICATE_FILTER_THRESHOLD = 10
 DOMINANT_FACTOR = 0.9
 NON_CANONICAL_PREC_FACTOR = 0.01   # smaller value makes it more "canonical"
 DISCARD_NO_READ_PREC_FLAG = 1
-plot_flag = 'false'
+PLOT_FLAG = 'false'
+BATCH_SIZE = NUM_THREADS * 10
 
 if args.thread:
     NUM_THREADS = args.thread
@@ -126,7 +127,7 @@ if args.mfe:
 if args.mincount:
     MIN_READ_COUNT_THRESHOLD = args.mincount
 if args.plot == 'true' or 'True':
-    plot_flag = args.plot
+    PLOT_FLAG = args.plot
 # DUPLICATE_FILTER_THRESHOLD, DOMINANT_FACTOR, NON_CANONICAL_PREC_FACTOR are internal variables
 # internal variables are not expected to be changed by users, but possible if one wants to experiment
 
@@ -435,7 +436,8 @@ if __name__ == '__main__':
     args = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
 
     # transform args to batches for memory usage suppression
-    batch_size = NUM_THREADS
+    # optimal batch size is probably dependent on the system
+    batch_size = BATCH_SIZE
     args = [args[i:i+batch_size] for i in range(0, len(args), batch_size)]
 
     # apply multiprocessing, one batch at a time
@@ -614,18 +616,25 @@ if __name__ == '__main__':
     num_chunk = len(lines)/numlines
     args = [(lines[line:line+numlines], queue) for line in range(0, len(lines), numlines)]
 
-    output_list = pool.map_async(mature_generator_wrapper, args)
-    while True:
-        if output_list.ready():
-            sys.stdout.write('\r%% of precursor data processed : %.2f %%' % 100)
-            print (' done')
-            break
-        size = queue.qsize()
-        sys.stdout.write('\r%% of precursor data processed : %.2f %%' % (float(size) / float(num_chunk) * 100))
-        time.sleep(0.1)
-    output_list = output_list.get()
-    # filter out empty elements
-    output_list = filter(None, output_list)
+    # transform args to batches for memory usage suppression
+    # optimal batch size is probably dependent on the system
+    batch_size = BATCH_SIZE
+    args = [args[i:i + batch_size] for i in range(0, len(args), batch_size)]
+
+    # apply multiprocessing, one batch at a time
+    # closing pool and extending partial result to original result suppresses memory usage
+    output_list = []
+    for args_partial in args:
+        output_list_partial = pool.map_async(mature_generator_wrapper, args_partial)
+        while True:
+            if output_list_partial.ready():
+                break
+            size = queue.qsize()
+            sys.stdout.write('\r%% of precursor data processed : %.2f %%' % (float(size) / float(num_chunk) * 100))
+            time.sleep(0.1)
+        output_list.extend(filter(None, output_list_partial.get()))
+    sys.stdout.write('\r%% of precursor data processed : %.2f %%' % 100)
+    print (' done')
 
     # result_mature.txt generation
     for i in output_list:
@@ -665,7 +674,7 @@ if __name__ == '__main__':
     for value in length_value_RPM:
         output_distribution.write(str(value)+'\t')
     output_distribution.write('\n')
-    if plot_flag == 'true' or 'True':
+    if PLOT_FLAG == 'true' or 'True':
         from matplotlib import pyplot
         # simple bar plot generation
         pyplot.bar(xrange(0, len(length_key)), length_value)
