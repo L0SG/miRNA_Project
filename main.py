@@ -38,7 +38,7 @@ parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend 
 parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor (default : 18)", type=int)
 parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq used for mature miRNA finding (default : 2)", type=int)
 parser.add_argument("--plot", help="draw simple bar plot of length distribution of genome-aligned RNA sequence, need matplotlib to be installed (default:false)")
-
+parser.add_argument("--batch_size", help="size of input data chunk for internal processing (default : number of CPU threads * 3)")
 args = parser.parse_args()
 
 # input file list
@@ -81,7 +81,7 @@ output_distribution = open(os.path.join(path, "result_length_distribution.txt"),
 output_tabular = open(os.path.join(path, "result_tabular_format.txt"), "w+")
 
 # variable list
-NUM_THREADS = 12
+NUM_THREADS = multiprocessing.cpu_count()
 MATURE_MIN_LEN = 18
 MATURE_MAX_LEN = 26
 MAX_SERIAL_MISMATCH = 2
@@ -127,8 +127,10 @@ if args.mfe:
     MIN_ABS_MFE = args.mfe
 if args.mincount:
     MIN_READ_COUNT_THRESHOLD = args.mincount
-if args.plot == 'true' or 'True':
+if args.plot == 'true' or args.plot == 'True':
     PLOT_FLAG = args.plot
+if args.batch_size:
+    BATCH_SIZE = args.batch_size
 # DUPLICATE_FILTER_THRESHOLD, DOMINANT_FACTOR, NON_CANONICAL_PREC_FACTOR are internal variables
 # internal variables are not expected to be changed by users, but possible if one wants to experiment
 
@@ -697,7 +699,7 @@ if __name__ == '__main__':
     for value in length_value_RPM:
         output_distribution.write(str(value)+'\t')
     output_distribution.write('\n')
-    if PLOT_FLAG == 'true' or 'True':
+    if PLOT_FLAG == 'true' or PLOT_FLAG == 'True':
         from matplotlib import pyplot
         # simple bar plot generation
         pyplot.bar(xrange(0, len(length_key)), length_value)
