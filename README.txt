@@ -157,6 +157,8 @@ if you want to allow more non-canonical miRNA-miRNA* duplex, you may want to inc
     draw simple bar plot of length distribution of genome-aligned RNA sequence
     if you set this value to true, the program generates "length-distribution.png" file to output path
     need matplotlib python package to be installed
+
+
                         
 
 
