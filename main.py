@@ -56,8 +56,10 @@ else:
 
 # Bowtie path
 if args.bowtiepath:
-    bowtie_path = args.bowtiepath
+    bowtie_build_path = os.path.join(args.bowtiepath, 'bowtie-build')
+    bowtie_path = os.path.join(args.bowtiepath, 'bowtie')
 else:
+    bowtie_build_path = "bowtie-build"
     bowtie_path = "bowtie"
 
 # RNAfold path
@@ -85,8 +87,8 @@ if args.output:
         os.mkdir(path)
 if os.path.exists(os.path.join(path, "map")):
     output_map = open(os.path.join(path, "map"), "r")
-    output_count_pos = open(os.path.join(path, "count_pos"), "r")
-    output_count_neg = open(os.path.join(path, "count_neg"), "r")
+    output_count_pos = open(os.path.join(path, "count_pos"), "rb")
+    output_count_neg = open(os.path.join(path, "count_neg"), "rb")
     ref_count_dump_pos = cPickle.load(output_count_pos)
     ref_count_dump_neg = cPickle.load(output_count_neg)
 output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
@@ -115,6 +117,7 @@ NON_CANONICAL_PREC_FACTOR = 0.01   # smaller value makes it more "canonical"
 DISCARD_NO_READ_PREC_FLAG = 1
 PLOT_FLAG = 'false'
 BATCH_SIZE = NUM_THREADS*3
+ANNOTATE_FLAG = 'false'
 
 if args.thread:
     NUM_THREADS = args.thread
@@ -144,6 +147,8 @@ if args.mincount:
     MIN_READ_COUNT_THRESHOLD = args.mincount
 if args.plot == 'true' or args.plot == 'True':
     PLOT_FLAG = args.plot
+if args.annotate == 'true' or args.annotate == 'True':
+    ANNOTATE_FLAG = args.annotate
 if args.batch_size:
     BATCH_SIZE = args.batch_size
 # DUPLICATE_FILTER_THRESHOLD, DOMINANT_FACTOR, NON_CANONICAL_PREC_FACTOR are internal variables
@@ -173,7 +178,7 @@ else:
     else:
         ref_file_path = os.path.join(os.getcwd(), "ref.fa")
     print("Generating index file with bowtie_build...")
-    bowtie_build = subprocess.Popen([bowtie_path+"/bowtie-build",
+    bowtie_build = subprocess.Popen([bowtie_build_path,
                                ref_file_path,
                                os.path.join(os.getcwd(), str(ref_file.name))],
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -193,7 +198,7 @@ else:
     else:
         smrna_file_path = os.path.join(os.getcwd(), "smrna.fa")
     print("Mapping smrna-seq to reference genome with bowtie...")
-    bowtie = subprocess.Popen([bowtie_path+"/bowtie", str(ref_file.name),
+    bowtie = subprocess.Popen([bowtie_path, str(ref_file.name),
                                "-f", smrna_file_path,
                                os.path.join(path, "map_bowtie"),
                                "-v", "0", "-m", str(MAX_MULTIPLE_LOCI), "-a", "-t", "-p", str(NUM_THREADS)],
@@ -589,7 +594,9 @@ def mature_generator(lines):
         # check conserved sequence with blastn
         # if this line_info is classified as conserved sequence, update line_info
         # no need to find duplex, just mark 5p and 3p index corresponding to matched information
-        line_info, updated_flag = SeqModule.check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, ARM_EXTEND_THRESHOLD)
+        updated_flag = False
+        if ANNOTATE_FLAG == 'true' or ANNOTATE_FLAG == 'True':
+            line_info, updated_flag = SeqModule.check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, ARM_EXTEND_THRESHOLD)
         # if updated_flag is True:
             # start_5p, end_5p, start_3p, end_3p = find_location(line_info, line_seq, line_db)
 
