@@ -22,23 +22,26 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-r", "--reference", help="reference genome file location(.fa, .fasta)")
 parser.add_argument("-i", "--input", help="input small RNA file location(.fa, .fasta)")
 parser.add_argument("-o", "--output", help="output file location")
-parser.add_argument("-w", "--bowtiepath", help="Bowtie location (default: command \"bowtie\")")
-parser.add_argument("-p", "--RNAfoldpath", help="RNAfold location (default : command \"RNAfold\")")
-parser.add_argument("-t", "--thread", help="number of CPU threads (default : 1)", type=int)
+parser.add_argument("--bowtiepath", help="Bowtie location (default: command \"bowtie\")")
+parser.add_argument("--RNAfoldpath", help="RNAfold location (default : command \"RNAfold\")")
 parser.add_argument("-l", "--minlength", help="min. length of mature miRNA (default : 18)", type=int)
 parser.add_argument("-L", "--maxlength", help="max. length of mature miRNA (default : 26)", type=int)
+parser.add_argument("--multloci", help="max. multiple loci of miRNA matches to reference genome (default : 20)", type=int)
+parser.add_argument("-d", "--distance", help="max. distance between miRNA-miRNA* of precursor hairpin loop (default : 35)", type=int)
+parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor from mature miRNA(miRNA*) (default : 10)", type=int)
+parser.add_argument("--mfe", help="min. abs. MFE for valid miRNA precursor (default : 18)", type=int)
 parser.add_argument("-m", "--serialmismatch", help="max. serial mismatch of miRNA-miRNA* duplex (default : 2)", type=int)
 parser.add_argument("-M", "--multmismatch", help="max. multiple mismatches of miRNA-miRNA* duplex (default : 2)", type=int)
 parser.add_argument("-b", "--serialbulge", help="max. serial bulge of miRNA-miRNA* duplex (default : 2)", type=int)
 parser.add_argument("-B", "--multbulge", help="max. multiple bulges of miRNA-miRNA* duplex (default : 2)", type=int)
-parser.add_argument("-u", "--multloci", help="max. multiple loci of miRNA matches to reference genome (default : 20)", type=int)
-parser.add_argument("-d", "--distance", help="max. distance between miRNA-miRNA* of precursor hairpin loop (default : 35)", type=int)
-parser.add_argument("-a", "--arm", help="length of arms(both ends) of precursor from mature miRNA(miRNA*) (default : 10)", type=int)
+parser.add_argument("-t", "--thread", help="number of CPU threads (default : 1)", type=int)
 parser.add_argument("-s", "--step", help="step size of RNAfold precursor extend loop (default : 2)", type=int)
-parser.add_argument("-f", "--mfe", help="min. abs. MFE for valid miRNA precursor (default : 18)", type=int)
 parser.add_argument("-c", "--mincount", help="min. read count of smRNA seq used for mature miRNA finding (default : 2)", type=int)
-parser.add_argument("--plot", help="draw simple bar plot of length distribution of genome-aligned RNA sequence, need matplotlib to be installed (default:false)")
-parser.add_argument("--batch_size", help="size of input data chunk for internal processing (default : number of CPU threads * 3)")
+parser.add_argument("--batch_size", help="size of input data chunk for internal processing (default : number of CPU threads * 3)", type=int)
+parser.add_argument("--plot", help="draw simple bar plot of length distribution of genome-aligned RNA sequence, need matplotlib to be installed (default : false)")
+parser.add_argument("--annotate", help="automatically annotate miRNA cadidates, blastn required (default : false")
+parser.add_argument("--mirbasepath", help="mirbase mature.fa location (default : mature.fa in current loccation)")
+parser.add_argument("--blastnpath", help="blastn location (default : command \"blastn\")")
 args = parser.parse_args()
 
 # input file list
@@ -62,6 +65,18 @@ if args.RNAfoldpath:
     RNAfold_path = os.path.join(args.RNAfoldpath, 'RNAfold')
 else:
     RNAfold_path = "RNAfold"
+
+# blastn path
+if args.blastnpath:
+    blastn_path = os.path.join(args.blastnpath, 'blastn')
+else:
+    blastn_path = "blastn"
+
+# mirbase path
+if args.mirbasepath:
+    mirbase_path = args.mirbasepath
+else:
+    mirbase_path = os.path.join(os.getcwd(), "mature.fa")
 
 # output file list
 if args.output:
@@ -136,7 +151,7 @@ if args.batch_size:
 
 ##################################### main script start #####################################
 
-print("miRNA Discovery Project")
+print("\nmiRNA Discovery Project")
 print("Program by Lee Sang-Gil")
 print("dept. of Applied Biology & Chemistry, Seoul National University")
 
@@ -220,6 +235,7 @@ ref_count_list_neg = []
 for i in range(0, len(ref_seq_list)):
     ref_count_list_pos.append(count_list(ref_count_dump_pos[i]))
     ref_count_list_neg.append(count_list(ref_count_dump_neg[i]))
+
 
 # use RNAfold to calculate MFE and select putative precursor
 print("\n########## pre-miRNA discovery started ##########")
@@ -512,11 +528,16 @@ output_precursor_collapsed.seek(0, 0)
 print("Collapsing done")
 print("########## pre-miRNA discovery complete ##########")
 
+
 print("\n########## mature miRNA-miRNA* duplex calculation started ##########")
 if not args.mincount:
     print("min. readcount threshold parameter (-c --mincount) not set, starting automatic read suppression...")
     print("checking smrna file size...")
+    # reads_total is calculated before, but for debugging purpose calculate again at this point
+    reads_total = 0
     for i, l in enumerate(smrna_file):
+        if l.startswith('>'):
+            reads_total += int(l.split()[1])
         pass
     smrna_file_length = (i+1)/2
     smrna_file.seek(0, 0)
@@ -564,6 +585,16 @@ def mature_generator(lines):
         line_seq = lines[iterator+1].strip()
         line_db = lines[iterator+2].strip()
         iterator += 3
+        #################### 160331 ###############################
+        # check conserved sequence with blastn
+        # if this line_info is classified as conserved sequence, update line_info
+        # no need to find duplex, just mark 5p and 3p index corresponding to matched information
+        line_info, updated_flag = SeqModule.check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, ARM_EXTEND_THRESHOLD)
+        # if updated_flag is True:
+            # start_5p, end_5p, start_3p, end_3p = find_location(line_info, line_seq, line_db)
+
+        ###########################################################
+
         # Discard non-canonical (i.e. "hard to identify") precursor
         # "Asymmetric" dot-bracket notation precursor : low accuracy, hard to identify star seq, and too many outputs
         # if ")" portion is large in "left side", it's non-canonical
@@ -572,6 +603,7 @@ def mature_generator(lines):
         num_close = line_db_left.count(")")
         if float(num_close)/num_open > NON_CANONICAL_PREC_FACTOR:
             continue
+
         # find valid star sequence from putative precursors
         start_5p, end_5p, start_3p, end_3p = SeqModule.star_identifier_v2(line_db, MATURE_MIN_LEN, MATURE_MAX_LEN,
                                                                           MAX_SERIAL_MISMATCH, MAX_MULT_MISMATCH,
@@ -580,6 +612,9 @@ def mature_generator(lines):
             continue
         
         # if no read data is matched in putative precursors, discard it
+        ################### replacement code ###############
+        # no_read_prec_flag = check_no_read_prec(line_info, map_data)
+        #####################################################
         if DISCARD_NO_READ_PREC_FLAG:
             count = 0
             if line_info.split()[5] == "+":
@@ -596,6 +631,9 @@ def mature_generator(lines):
                 continue
 
         # write putative precursor to the output file
+        ################### replacement code #############
+        # output_form = generate_output_form(line_info, line_seq, line_db, start_5p, start_3p, map_data, MIN_READ_COUNT_THRESHOLD)
+        #################################################
         output_form = []
         output_form.append(str((line_info+"\n"+line_seq+"\n"+line_db+"\n")))
         output_form.append(str(('*'*start_5p+line_seq[start_5p:end_5p]+'*'*(len(line_seq)-end_5p)+"\n")))
@@ -661,6 +699,8 @@ if __name__ == '__main__':
     sys.stdout.write('\r%% of precursor data processed : %.2f %%' % 100)
     print (' done')
 
+    # sort output_list to display conserved miRNAs first
+    output_list.sort(key=operator.itemgetter(0))
     # result_mature.txt generation
     for i in output_list:
         output_mature.write(str(("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")))

@@ -78,6 +78,67 @@ def count_generator(ref_name_list, output_map):
     return count_list_pos, count_list_neg
 
 
+def check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, arm_length):
+    import subprocess
+    import os
+    from operator import itemgetter
+
+    # run blastn for given line_info
+    updated_flag = False
+    seq_name = line_info.split()[0]
+    seq_seq = line_info.split()[6]
+    command = blastn_path
+    mirbase = mirbase_path
+    command = command + ' -task blastn -db "' + mirbase + '" -outfmt 6 -strand plus -num_alignments 10 -ungapped'
+    blastn = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output, err = blastn.communicate(seq_seq)
+    output = [x.split('\t') for x in output.split('\n')][:-1]
+    # if many same matches are detected, annotate it with the matched information
+    # get top matches
+    top_num = 3
+    output_top_check = map(itemgetter(0), output)
+    if len(output_top_check) < top_num:
+        return line_info, updated_flag
+    output_name = map(itemgetter(1), output)[:top_num]
+    output_query_start = map(int, map(itemgetter(6), output)[:top_num])
+    output_query_end = map(int, map(itemgetter(7), output)[:top_num])
+    output_target_start = map(int, map(itemgetter(8), output)[:top_num])
+    output_target_end = map(int, map(itemgetter(9), output)[:top_num])
+
+    # check if all value for each lists are same
+    if check_same(output_query_start, output_query_end, output_target_start, output_target_end) is False:
+        return line_info, updated_flag
+
+    if output_target_start[0] != 1:
+        return line_info, updated_flag
+
+    # update line information
+    line_split = line_info.split()
+    prec_match_start = line_seq.find(seq_seq)
+    prec_match_end = prec_match_start + len(seq_seq)
+
+    switch_start = output_target_start[0]-output_query_start[0]
+    switch_end = output_target_end[0]-output_query_end[0]
+    mature_start_updated = int(line_split[3]) + switch_start
+    mature_end_updated = int(line_split[4]) + switch_end
+    mature_seq_updated = line_seq[prec_match_start+switch_start:prec_match_end+switch_end]
+    # index handling (for RARE case of extremely short arm length specified by user)
+    if int(line_split[9]) <= mature_start_updated and int(line_split[10]) >= mature_end_updated:
+        line_split[0] = 'xxx-'+output_name[0][4:] # heuristic implementation, need to be improved later
+        line_split[3] = str(mature_start_updated)
+        line_split[4] = str(mature_end_updated)
+        line_split[6] = mature_seq_updated
+        line_info = '\t'.join(line_split)
+        updated_flag = True
+
+    return line_info, updated_flag
+
+
+def check_same(*args):
+    for index, check_list in enumerate(args):
+        if check_list.count(check_list[0]) != len(check_list):
+            return False
+    return True
 
 
 def score_seq(target_5p, target_3p):
