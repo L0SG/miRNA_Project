@@ -632,10 +632,86 @@ def mature_generator(lines):
     return output_list
 
 
+def mature_generator_v2(lines):
+    global map_data
+    # each loop should read exactly 3 lines
+    output_list=[]
+    iterator = 0
+    while 1:
+        if iterator == len(lines):
+            break
+        line_info = lines[iterator].strip()
+        if line_info == "":
+            break
+        line_seq = lines[iterator+1].strip()
+        line_db = lines[iterator+2].strip()
+        iterator += 3
+
+        # if no read data is matched in putative precursors, discard it
+        if DISCARD_NO_READ_PREC_FLAG:
+            no_read_prec_flag = SeqModule.check_no_read_prec(line_info, map_data, MIN_READ_COUNT_THRESHOLD)
+            if no_read_prec_flag is True:
+                continue
+        # get alignment form fist
+        output_form = SeqModule.generate_alignment_form(line_info, line_seq, line_db,
+                                                     map_data, MIN_READ_COUNT_THRESHOLD)
+        # check conserved sequence with blastn
+        # if this line_info is classified as conserved sequence, update line_info
+        # no need to find duplex, just mark 5p and 3p index corresponding to matched information
+        updated_flag = False
+        if ANNOTATE_FLAG == 'true' or ANNOTATE_FLAG == 'True':
+            output_form[0], updated_flag = SeqModule.check_conserved_seq(output_form[0], line_seq,
+                                                                    blastn_path, mirbase_path, ARM_EXTEND_THRESHOLD)
+            if updated_flag is True:
+                start_5p, end_5p, start_3p, end_3p = SeqModule.star_identifier_v2_conserved(output_form[0], line_seq, line_db,
+                                                                                            MATURE_MIN_LEN, MATURE_MAX_LEN,
+                                                                                            MAX_SERIAL_MISMATCH, MAX_MULT_MISMATCH,
+                                                                                            MAX_SERIAL_BULGE, MAX_MULT_BULGE)
+            else:
+                start_5p, end_5p, start_3p, end_3p = SeqModule.star_identifier_v2(line_db, MATURE_MIN_LEN, MATURE_MAX_LEN,
+                                                                                  MAX_SERIAL_MISMATCH, MAX_MULT_MISMATCH,
+                                                                                  MAX_SERIAL_BULGE, MAX_MULT_BULGE)
+            if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
+                continue
+
+            # write putative precursor to the output file
+            # in this case, first parameter is output_form[0] since it is updated from previous output_form
+            output_form = SeqModule.generate_output_form(output_form[0], line_seq, line_db,
+                                                         start_5p, start_3p, end_5p, end_3p,
+                                                         map_data, MIN_READ_COUNT_THRESHOLD)
+        # else, do the code below
+        ###########################################################
+        if ANNOTATE_FLAG == 'false' or ANNOTATE_FLAG == 'False':
+            # Discard non-canonical (i.e. "hard to identify") precursor
+            # "Asymmetric" dot-bracket notation precursor : low accuracy, hard to identify star seq, and too many outputs
+            # if ")" portion is large in "left side", it's non-canonical
+
+            line_db_left = line_db[0:len(line_db)/2]
+            num_open = line_db_left.count("(")
+            num_close = line_db_left.count(")")
+            if float(num_close)/num_open > NON_CANONICAL_PREC_FACTOR:
+                continue
+
+            # find valid star sequence from putative precursors
+            start_5p, end_5p, start_3p, end_3p = SeqModule.star_identifier_v2(line_db, MATURE_MIN_LEN, MATURE_MAX_LEN,
+                                                                              MAX_SERIAL_MISMATCH, MAX_MULT_MISMATCH,
+                                                                              MAX_SERIAL_BULGE, MAX_MULT_BULGE)
+            if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
+                continue
+
+            # write putative precursor to the output file
+            output_form = SeqModule.generate_output_form(line_info, line_seq, line_db,
+                                                         start_5p, start_3p, end_5p, end_3p,
+                                                         map_data, MIN_READ_COUNT_THRESHOLD)
+
+        output_list.append(output_form)
+    return output_list
+
+
 # wrapper function for progress monitoring
 def mature_generator_wrapper(args_):
     input_original, q = args_
-    result = mature_generator(input_original)
+    result = mature_generator_v2(input_original)
     q.put(0)
     return result
 

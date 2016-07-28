@@ -336,6 +336,174 @@ def generate_output_form(line_info, line_seq, line_db, start_5p, start_3p, end_5
     return output_form
 
 
+def generate_alignment_form(line_info, line_seq, line_db, map_data, MIN_READ_COUNT_THRESHOLD):
+    # this is a variant of original generate_output_form
+    # no calculated duplex information, align first
+    # get highest reads seq as representative, and search the seq for duplex annotation
+    import operator
+    output_form = []
+    output_form.append(str((line_info + "\n")))
+    output_form.append(str((line_seq + "\n")))
+    output_form.append(str((line_db + "\n")))
+    if line_info.split()[5] == "+":
+        for i in range(0, len(map_data)):
+            if line_info.split()[2] == map_data[i][2]\
+                    and int(line_info.split()[9]) <= int(map_data[i][3])\
+                    and int(line_info.split()[10]) >= int(map_data[i][4])\
+                    and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                # filter out reverse complement case
+                space_left = int(map_data[i][3]) - int(line_info.split()[9])
+                space_right = int(line_info.split()[10]) - int(map_data[i][4])
+                seq_align = map_data[i][6]
+                seq_ref = line_seq[space_left:space_left + len(seq_align)]
+                if seq_align != seq_ref:
+                    continue
+                output_form.append(str(('-' * space_left + str(map_data[i][6]) +
+                                        '-' * space_right + '\t' +
+                                        str(map_data[i][0]) + '\t' + str(map_data[i][1]) + '\n')))
+    elif line_info.split()[5] == "-":
+        for i in range(0, len(map_data)):
+            if line_info.split()[2] == map_data[i][2]\
+                    and int(line_info.split()[9]) <= int(map_data[i][3])\
+                    and int(line_info.split()[10]) >= int(map_data[i][4])\
+                    and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                # filter out reverse complement case
+                space_left = int(line_info.split()[10]) - int(map_data[i][4])
+                space_right = int(map_data[i][3]) - int(line_info.split()[9])
+                seq_align = map_data[i][6]
+                seq_ref = line_seq[space_left:space_left + len(seq_align)]
+                if seq_align != seq_ref:
+                    continue
+                output_form.append(str(('-' * space_left + str(map_data[i][6]) +
+                                        '-' * space_right + '\t' +
+                                        str(map_data[i][0]) + '\t' + str(map_data[i][1]) + '\n')))
+    aligned_list = output_form[3:]
+    for i in xrange(0, len(aligned_list)):
+        aligned_list[i] = aligned_list[i].split()
+        aligned_list[i][2] = int(aligned_list[i][2])
+    aligned_list.sort(key=operator.itemgetter(2), reverse=True)
+    seq_rep = aligned_list[0][0].strip('-')
+    idx_start = aligned_list[0][0].index(seq_rep)
+    idx_end = idx_start + len(seq_rep)
+    output_info = output_form[0].split()
+    if output_info[5] == '+':
+        mature_start = int(output_info[9]) + idx_start
+        mature_end = mature_start + len(seq_rep)
+    elif output_info[5] == '-':
+        mature_end = int(output_info[10]) - idx_start
+        mature_start = mature_end - len(seq_rep)
+
+    output_info[3] = str(mature_start)
+    output_info[4] = str(mature_end)
+    output_info[6] = seq_rep
+    output_form[0] = '\t'.join(output_info)+'\n'
+    return output_form
+
+
+def star_identifier_v2_conserved(line_info, line_seq, precursor_db, mature_min_len, mature_max_len, max_serial_mismatch, max_mult_mismatch, max_serial_bulge, max_mult_bulge):
+    start_5p = 0
+    end_5p = 0
+    start_3p = 0
+    end_3p = 0
+    norm_score = 999
+    for i in range(0, len(precursor_db) - mature_min_len):  # search potential -5p seq
+        for j in range(mature_min_len, mature_max_len):
+            if i+j >= len(precursor_db):
+                continue
+            target_5p = precursor_db[i:i+j]
+            if ")" in target_5p:
+                continue
+            # consider 2nt overhang
+            num_bracket = target_5p[0:len(target_5p)-2].count("(")
+            # find target_3p corresponding to db notation of the precursor
+            iter_hairpin = i+j-2
+            open_count = 0
+            close_count = 0
+            index_error_flag = 0
+            while 1:
+                if iter_hairpin == len(precursor_db):
+                    index_error_flag = 1
+                    break
+                if precursor_db[iter_hairpin] == "(":
+                    open_count += 1
+                    iter_hairpin += 1
+                elif precursor_db[iter_hairpin] == ".":
+                    iter_hairpin += 1
+                elif precursor_db[iter_hairpin] == ")":
+                    break
+            while open_count != close_count:
+                if iter_hairpin == len(precursor_db):
+                    index_error_flag = 1
+                    break
+                if precursor_db[iter_hairpin] == "(":
+                    open_count += 1
+                    iter_hairpin += 1
+                elif precursor_db[iter_hairpin] == ".":
+                    iter_hairpin += 1
+                elif precursor_db[iter_hairpin] == ")":
+                    close_count += 1
+                    iter_hairpin += 1
+            if index_error_flag == 1:
+                continue
+            # iter_hairpin is now the candidate start index of target_3p
+            # db of this index could be ".", so keep searching until another ")" appears
+            # if ")" appears, this index violates db notations of the precursor
+            stop_flag = 0
+            if iter_hairpin == len(precursor_db):
+                continue
+            while precursor_db[iter_hairpin] == "." or ")":
+                if precursor_db[iter_hairpin] == ")":
+                    stop_flag = 1
+                for l in range(mature_min_len, mature_max_len):
+                    if iter_hairpin+l < len(precursor_db):
+                        target_3p_pre = precursor_db[iter_hairpin:iter_hairpin+l]
+                        target_3p = target_3p_pre[::-1]
+                        if "(" in target_3p:
+                            continue
+                        # consider 2nt overhang
+                        if num_bracket != target_3p[2:len(target_3p)].count(")"):
+                            continue
+                        # NEW ad-hoc lines for conserved seq
+                        line_info_split = line_info.split()
+                        if line_info_split[5] == '+':
+                            cmp_start = int(line_info_split[3])-int(line_info_split[9])
+                            cmp_end = cmp_start + len(line_info_split[6])
+                        elif line_info_split[5] == '-':
+                            cmp_end = len(precursor_db) - int(line_info_split[3])-int(line_info_split[9])
+                            cmp_start = cmp_end - len(line_info_split[6])
+                        # 5p match case
+                        if cmp_start == i and cmp_end == i+j:
+                            start_5p = i
+                            end_5p = i + j
+                            start_3p = iter_hairpin
+                            end_3p = iter_hairpin + l
+                            stop_flag = 1
+                        # 3p match case
+                        if cmp_start == iter_hairpin and cmp_end == iter_hairpin+l:
+                            start_5p = i
+                            end_5p = i + j
+                            start_3p = iter_hairpin
+                            end_3p = iter_hairpin + l
+                            stop_flag = 1
+                        """
+                        # consider 3p 2nt overhang and score target seq
+                        msm, mmm, msb, mmb = score_seq(target_5p[0:len(target_5p)-2], target_3p[2:len(target_3p)])
+                        if msm <= max_serial_mismatch and mmm <= max_mult_mismatch and msb <= max_serial_bulge and mmb <= max_mult_bulge:
+                            if norm_score > msm + mmm + msb + mmb:
+                                start_5p = i
+                                end_5p = i+j
+                                start_3p = iter_hairpin
+                                end_3p = iter_hairpin+l
+                                norm_score = msm + mmm + msb + mmb
+                        """
+                iter_hairpin += 1
+                if stop_flag == 1:
+                    break
+                if iter_hairpin == len(precursor_db):
+                    break
+    return start_5p, end_5p, start_3p, end_3p
+
+
 def builtin_map_generator(smrna_file, ref_name_list, ref_seq_list,
                           output_map, ref_count_list_pos, ref_count_list_neg,
                           NUM_THREADS, MAX_MULTIPLE_LOCI):
