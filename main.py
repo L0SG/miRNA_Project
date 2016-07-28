@@ -164,12 +164,11 @@ print("dept. of Applied Biology & Chemistry, Seoul National University")
 print("Loading reference genome file to memory...")
 ref_name_list, ref_seq_list = FileIOModule.create_ref_seq(ref_file)
 
-
 # check whether index file was generated before
 if os.path.exists(os.path.join(os.getcwd(), str(ref_file.name)+".1.ebwt")):
     print("Index file detected, skipping index generation...")
 else:
-    # genarate map file using bowtie
+    # generate map file using bowtie
 
     # generate bowtie index
     # index files are saved to the same path where the reference file is stored
@@ -590,16 +589,23 @@ def mature_generator(lines):
         line_seq = lines[iterator+1].strip()
         line_db = lines[iterator+2].strip()
         iterator += 3
-        #################### 160331 ###############################
+
+        # if no read data is matched in putative precursors, discard it
+        if DISCARD_NO_READ_PREC_FLAG:
+            no_read_prec_flag = SeqModule.check_no_read_prec(line_info, map_data, MIN_READ_COUNT_THRESHOLD)
+            if no_read_prec_flag is True:
+                continue
+
         # check conserved sequence with blastn
         # if this line_info is classified as conserved sequence, update line_info
         # no need to find duplex, just mark 5p and 3p index corresponding to matched information
         updated_flag = False
         if ANNOTATE_FLAG == 'true' or ANNOTATE_FLAG == 'True':
-            line_info, updated_flag = SeqModule.check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, ARM_EXTEND_THRESHOLD)
+            line_info, updated_flag = SeqModule.check_conserved_seq(line_info, line_seq,
+                                                                    blastn_path, mirbase_path, ARM_EXTEND_THRESHOLD)
         # if updated_flag is True:
-            # start_5p, end_5p, start_3p, end_3p = find_location(line_info, line_seq, line_db)
-
+            # start_5p, end_5p, start_3p, end_3p = SeqModule.find_location(line_info, line_seq, line_db)
+        # else, do the code below
         ###########################################################
 
         # Discard non-canonical (i.e. "hard to identify") precursor
@@ -617,48 +623,11 @@ def mature_generator(lines):
                                                                           MAX_SERIAL_BULGE, MAX_MULT_BULGE)
         if start_5p == 0 and end_5p == 0 and start_3p == 0 and end_3p == 0:  # star seq not found
             continue
-        
-        # if no read data is matched in putative precursors, discard it
-        ################### replacement code ###############
-        # no_read_prec_flag = check_no_read_prec(line_info, map_data)
-        #####################################################
-        if DISCARD_NO_READ_PREC_FLAG:
-            count = 0
-            if line_info.split()[5] == "+":
-                for i in range(0, len(map_data)):
-                    if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
-                            and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
-                        count += 1
-            elif line_info.split()[5] == "-":
-                for i in range(0, len(map_data)):
-                    if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
-                            and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
-                        count += 1
-            if count == 0:
-                continue
 
         # write putative precursor to the output file
-        ################### replacement code #############
-        # output_form = generate_output_form(line_info, line_seq, line_db, start_5p, start_3p, map_data, MIN_READ_COUNT_THRESHOLD)
-        #################################################
-        output_form = []
-        output_form.append(str((line_info+"\n"+line_seq+"\n"+line_db+"\n")))
-        output_form.append(str(('*'*start_5p+line_seq[start_5p:end_5p]+'*'*(len(line_seq)-end_5p)+"\n")))
-        output_form.append(str(('*'*start_3p+line_seq[start_3p:end_3p]+'*'*(len(line_seq)-end_3p)+"\n")))
-        if line_info.split()[5] == "+":
-            for i in range(0, len(map_data)):
-                if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
-                        and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
-                    output_form.append(str(('-'*(int(map_data[i][3])-int(line_info.split()[9]))+str(map_data[i][6])+
-                                        '-'*(int(line_info.split()[10])-int(map_data[i][4]))+'\t'+
-                                        str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')))
-        elif line_info.split()[5] == "-":
-            for i in range(0, len(map_data)):
-                if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3])\
-                        and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
-                    output_form.append(str(('-'*(int(line_info.split()[10])-int(map_data[i][4]))+str(map_data[i][6])+
-                                        '-'*(int(map_data[i][3])-int(line_info.split()[9]))+'\t'+
-                                        str(map_data[i][0])+'\t'+str(map_data[i][1])+'\n')))
+        output_form = SeqModule.generate_output_form(line_info, line_seq, line_db,
+                                                     start_5p, start_3p, end_5p, end_3p,
+                                                     map_data, MIN_READ_COUNT_THRESHOLD)
         output_list.append(output_form)
     return output_list
 

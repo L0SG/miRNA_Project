@@ -199,6 +199,23 @@ def score_seq(target_5p, target_3p):
     return max_serial_mismatch, max_mult_mismatch, max_serial_bulge, max_mult_bulge
 
 
+def check_no_read_prec(line_info, map_data, MIN_READ_COUNT_THRESHOLD):
+    count = 0
+    if line_info.split()[5] == "+":
+        for i in range(0, len(map_data)):
+            if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3]) \
+                    and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                count += 1
+    elif line_info.split()[5] == "-":
+        for i in range(0, len(map_data)):
+            if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3]) \
+                    and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                count += 1
+    if count == 0:
+        return True
+    return False
+
+
 def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_mismatch, max_mult_mismatch, max_serial_bulge, max_mult_bulge):
     start_5p = 0
     end_5p = 0
@@ -277,6 +294,46 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
                 if iter_hairpin == len(precursor_db):
                     break
     return start_5p, end_5p, start_3p, end_3p
+
+
+def generate_output_form(line_info, line_seq, line_db, start_5p, start_3p, end_5p, end_3p, map_data, MIN_READ_COUNT_THRESHOLD):
+    output_form = []
+    output_form.append(str((line_info + "\n" + line_seq + "\n" + line_db + "\n")))
+    output_form.append(str(('*' * start_5p + line_seq[start_5p:end_5p] + '*' * (len(line_seq) - end_5p) + "\n")))
+    output_form.append(str(('*' * start_3p + line_seq[start_3p:end_3p] + '*' * (len(line_seq) - end_3p) + "\n")))
+    if line_info.split()[5] == "+":
+        for i in range(0, len(map_data)):
+            if line_info.split()[2] == map_data[i][2]\
+                    and int(line_info.split()[9]) <= int(map_data[i][3])\
+                    and int(line_info.split()[10]) >= int(map_data[i][4])\
+                    and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                # filter out reverse complement case
+                space_left = int(map_data[i][3]) - int(line_info.split()[9])
+                space_right = int(line_info.split()[10]) - int(map_data[i][4])
+                seq_align = map_data[i][6]
+                seq_ref = line_seq[space_left:space_left + len(seq_align)]
+                if seq_align != seq_ref:
+                    continue
+                output_form.append(str(('-' * space_left + str(map_data[i][6]) +
+                                        '-' * space_right + '\t' +
+                                        str(map_data[i][0]) + '\t' + str(map_data[i][1]) + '\n')))
+    elif line_info.split()[5] == "-":
+        for i in range(0, len(map_data)):
+            if line_info.split()[2] == map_data[i][2]\
+                    and int(line_info.split()[9]) <= int(map_data[i][3])\
+                    and int(line_info.split()[10]) >= int(map_data[i][4])\
+                    and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                # filter out reverse complement case
+                space_left = int(line_info.split()[10]) - int(map_data[i][4])
+                space_right = int(map_data[i][3]) - int(line_info.split()[9])
+                seq_align = map_data[i][6]
+                seq_ref = line_seq[space_left:space_left + len(seq_align)]
+                if seq_align != seq_ref:
+                    continue
+                output_form.append(str(('-' * space_left + str(map_data[i][6]) +
+                                        '-' * space_right + '\t' +
+                                        str(map_data[i][0]) + '\t' + str(map_data[i][1]) + '\n')))
+    return output_form
 
 
 def builtin_map_generator(smrna_file, ref_name_list, ref_seq_list,
