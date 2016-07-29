@@ -305,7 +305,9 @@ def star_identifier_v2(precursor_db, mature_min_len, mature_max_len, max_serial_
 
 def generate_output_form(line_info, line_seq, line_db, start_5p, start_3p, end_5p, end_3p, map_data, MIN_READ_COUNT_THRESHOLD):
     output_form = []
-    output_form.append(str((line_info + "\n" + line_seq + "\n" + line_db + "\n")))
+    output_form.append(str((line_info + "\n")))
+    output_form.append(str((line_seq + "\n")))
+    output_form.append(str((line_db + "\n")))
     output_form.append(str(('*' * start_5p + line_seq[start_5p:end_5p] + '*' * (len(line_seq) - end_5p) + "\n")))
     output_form.append(str(('*' * start_3p + line_seq[start_3p:end_3p] + '*' * (len(line_seq) - end_3p) + "\n")))
     if line_info.split()[5] == "+":
@@ -511,6 +513,27 @@ def star_identifier_v2_conserved(line_info, line_seq, precursor_db, mature_min_l
                 if iter_hairpin == len(precursor_db):
                     break
     return start_5p, end_5p, start_3p, end_3p
+
+
+def structure_check(line_info, line_seq, line_db, msb, msm):
+    seq_rep = line_info.split()[6]
+    idx_start = line_seq.index(seq_rep)
+    idx_end = idx_start + len(seq_rep)
+    db_rep = line_db[idx_start:idx_end-2]
+    if db_rep.count('.') > msb+msm+2:
+        return False
+    max_serial_count = 0
+    serial_count = 0
+    for idx in xrange(0, len(db_rep)):
+        if db_rep[idx] == '.':
+            serial_count += 1
+        else:
+            if max_serial_count < serial_count:
+                max_serial_count = serial_count
+            serial_count = 0
+    if max_serial_count > msb+2 or max_serial_count > msm+2:
+        return False
+    return True
 
 
 def builtin_map_generator(smrna_file, ref_name_list, ref_seq_list,

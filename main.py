@@ -675,13 +675,12 @@ def mature_generator_v2(lines):
                 continue
 
             # write putative precursor to the output file
-            # in this case, first parameter is output_form[0] since it is updated from previous output_form
             output_form = SeqModule.generate_output_form(output_form[0], line_seq, line_db,
                                                          start_5p, start_3p, end_5p, end_3p,
                                                          map_data, MIN_READ_COUNT_THRESHOLD)
         # else, do the code below
         ###########################################################
-        if ANNOTATE_FLAG == 'false' or ANNOTATE_FLAG == 'False':
+        elif ANNOTATE_FLAG == 'false' or ANNOTATE_FLAG == 'False':
             # Discard non-canonical (i.e. "hard to identify") precursor
             # "Asymmetric" dot-bracket notation precursor : low accuracy, hard to identify star seq, and too many outputs
             # if ")" portion is large in "left side", it's non-canonical
@@ -700,7 +699,7 @@ def mature_generator_v2(lines):
                 continue
 
             # write putative precursor to the output file
-            output_form = SeqModule.generate_output_form(line_info, line_seq, line_db,
+            output_form = SeqModule.generate_output_form(output_form[0], line_seq, line_db,
                                                          start_5p, start_3p, end_5p, end_3p,
                                                          map_data, MIN_READ_COUNT_THRESHOLD)
 
@@ -750,6 +749,22 @@ if __name__ == '__main__':
         pool.join()
     sys.stdout.write('\r%% of precursor data processed : %.2f %%' % 100)
     print (' done')
+
+    ##############
+    # post-process output list using the criteria used for the paper
+    output_list_new = []
+    for idx in xrange(0, len(output_list)):
+        line_info = output_list[idx][0][0]
+        line_seq = output_list[idx][0][1]
+        line_db = output_list[idx][0][2]
+        if len(line_info.split()[6]) < MATURE_MIN_LEN or len(line_info.split()[6]) > MATURE_MAX_LEN:
+            continue
+        # ad-hoc hack for high-confidence annotation
+        if SeqModule.structure_check(line_info, line_seq, line_db, MAX_SERIAL_BULGE, MAX_SERIAL_MISMATCH) is False:
+            continue
+        output_list_new.append(output_list[idx])
+    output_list = output_list_new
+    ##############
 
     # sort output_list to display conserved miRNAs first
     output_list.sort(key=operator.itemgetter(0))
