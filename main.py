@@ -652,7 +652,7 @@ def mature_generator_v2(lines):
             no_read_prec_flag = SeqModule.check_no_read_prec(line_info, map_data, MIN_READ_COUNT_THRESHOLD)
             if no_read_prec_flag is True:
                 continue
-        # get alignment form fist
+        # get alignment form first
         output_form = SeqModule.generate_alignment_form(line_info, line_seq, line_db,
                                                      map_data, MIN_READ_COUNT_THRESHOLD)
         # check conserved sequence with blastn

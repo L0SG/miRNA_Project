@@ -82,6 +82,7 @@ def check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, arm_leng
     import subprocess
     import os
     from operator import itemgetter
+    import re
 
     # run blastn for given line_info
     updated_flag = False
@@ -89,7 +90,7 @@ def check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, arm_leng
     seq_seq = line_info.split()[6]
     command = blastn_path
     mirbase = mirbase_path
-    command = command + ' -task blastn -db "' + mirbase + '" -outfmt 6 -strand plus -num_alignments 10 -ungapped'
+    command = command + ' -task blastn -db "' + mirbase + '" -outfmt 6 -strand plus -num_alignments 10 -ungapped -evalue 0.01'
     blastn = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output, err = blastn.communicate(seq_seq)
     output = [x.split('\t') for x in output.split('\n')][:-1]
@@ -100,18 +101,24 @@ def check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, arm_leng
     if len(output_top_check) < top_num:
         return line_info, updated_flag
     output_name = map(itemgetter(1), output)[:top_num]
+    for i in xrange(0, len(output_name)):
+        family_num = re.findall('\d+', output_name[i])
+        output_name[i] = str(family_num[0].strip("'"))
     output_query_start = map(int, map(itemgetter(6), output)[:top_num])
     output_query_end = map(int, map(itemgetter(7), output)[:top_num])
     output_target_start = map(int, map(itemgetter(8), output)[:top_num])
     output_target_end = map(int, map(itemgetter(9), output)[:top_num])
 
+    if check_same(output_name) is False:
+        return line_info, updated_flag
+    """
     # check if all value for each lists are same
     if check_same(output_query_start, output_query_end, output_target_start, output_target_end) is False:
         return line_info, updated_flag
 
     if output_target_start[0] != 1:
         return line_info, updated_flag
-
+    """
     # update line information
     line_split = line_info.split()
     prec_match_start = line_seq.find(seq_seq)
@@ -124,7 +131,7 @@ def check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, arm_leng
     mature_seq_updated = line_seq[prec_match_start+switch_start:prec_match_end+switch_end]
     # index handling (for RARE case of extremely short arm length specified by user)
     if int(line_split[9]) <= mature_start_updated and int(line_split[10]) >= mature_end_updated:
-        line_split[0] = 'xxx-'+output_name[0][4:] # heuristic implementation, need to be improved later
+        line_split[0] = 'xxx-miR'+output_name[0] # heuristic implementation, need to be improved later
         line_split[3] = str(mature_start_updated)
         line_split[4] = str(mature_end_updated)
         line_split[6] = mature_seq_updated
@@ -396,7 +403,7 @@ def generate_alignment_form(line_info, line_seq, line_db, map_data, MIN_READ_COU
     output_info[3] = str(mature_start)
     output_info[4] = str(mature_end)
     output_info[6] = seq_rep
-    output_form[0] = '\t'.join(output_info)+'\n'
+    output_form[0] = '\t'.join(output_info)
     return output_form
 
 
@@ -471,31 +478,33 @@ def star_identifier_v2_conserved(line_info, line_seq, precursor_db, mature_min_l
                         elif line_info_split[5] == '-':
                             cmp_end = len(precursor_db) - int(line_info_split[3])-int(line_info_split[9])
                             cmp_start = cmp_end - len(line_info_split[6])
+                        conserved_structure_threshold = 3
                         # 5p match case
                         if cmp_start == i and cmp_end == i+j:
-                            start_5p = i
-                            end_5p = i + j
-                            start_3p = iter_hairpin
-                            end_3p = iter_hairpin + l
+                            # consider 3p 2nt overhang and score target seq
+                            msm, mmm, msb, mmb = score_seq(target_5p[0:len(target_5p) - 2], target_3p[2:len(target_3p)])
+                            if msm <= conserved_structure_threshold and mmm <= conserved_structure_threshold\
+                                    and msb <= conserved_structure_threshold and mmb <= conserved_structure_threshold:
+                                if norm_score > msm + mmm + msb + mmb:
+                                    start_5p = i
+                                    end_5p = i + j
+                                    start_3p = iter_hairpin
+                                    end_3p = iter_hairpin + l
+                                    norm_score = msm + mmm + msb + mmb
                             stop_flag = 1
                         # 3p match case
                         if cmp_start == iter_hairpin and cmp_end == iter_hairpin+l:
-                            start_5p = i
-                            end_5p = i + j
-                            start_3p = iter_hairpin
-                            end_3p = iter_hairpin + l
+                            # consider 3p 2nt overhang and score target seq
+                            msm, mmm, msb, mmb = score_seq(target_5p[0:len(target_5p) - 2], target_3p[2:len(target_3p)])
+                            if msm <= conserved_structure_threshold and mmm <= conserved_structure_threshold\
+                                    and msb <= conserved_structure_threshold and mmb <= conserved_structure_threshold:
+                                if norm_score > msm + mmm + msb + mmb:
+                                    start_5p = i
+                                    end_5p = i + j
+                                    start_3p = iter_hairpin
+                                    end_3p = iter_hairpin + l
+                                    norm_score = msm + mmm + msb + mmb
                             stop_flag = 1
-                        """
-                        # consider 3p 2nt overhang and score target seq
-                        msm, mmm, msb, mmb = score_seq(target_5p[0:len(target_5p)-2], target_3p[2:len(target_3p)])
-                        if msm <= max_serial_mismatch and mmm <= max_mult_mismatch and msb <= max_serial_bulge and mmb <= max_mult_bulge:
-                            if norm_score > msm + mmm + msb + mmb:
-                                start_5p = i
-                                end_5p = i+j
-                                start_3p = iter_hairpin
-                                end_3p = iter_hairpin+l
-                                norm_score = msm + mmm + msb + mmb
-                        """
                 iter_hairpin += 1
                 if stop_flag == 1:
                     break
