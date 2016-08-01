@@ -401,10 +401,23 @@ def generate_alignment_form(line_info, line_seq, line_db, map_data, MIN_READ_COU
     elif output_info[5] == '-':
         mature_end = int(output_info[10]) - idx_start
         mature_start = mature_end - len(seq_rep)
-
     output_info[3] = str(mature_start)
     output_info[4] = str(mature_end)
     output_info[6] = seq_rep
+
+    # new info : mature_len and mature_prime
+    output_info.append(str(len(seq_rep)))
+    seq_start_idx = line_seq.index(seq_rep)
+    seq_end_idx = seq_start_idx + len(seq_rep)
+    # 5p case
+    if seq_end_idx < len(line_seq)/2:
+        output_info.append('5p')
+    # 3p case
+    elif seq_start_idx > len(line_seq)/2:
+        output_info.append('3p')
+    # bad structure case: rep_seq is in the middle
+    else:
+        output_info.append('bad')
     output_form[0] = '\t'.join(output_info)
     return output_form
 

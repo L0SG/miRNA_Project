@@ -655,6 +655,10 @@ def mature_generator_v2(lines):
         # get alignment form first
         output_form = SeqModule.generate_alignment_form(line_info, line_seq, line_db,
                                                      map_data, MIN_READ_COUNT_THRESHOLD)
+        # if mature_prime is bad, discard it
+        if output_form[0].split()[12] == 'bad':
+            continue
+
         # check conserved sequence with blastn
         # if this line_info is classified as conserved sequence, update line_info
         # no need to find duplex, just mark 5p and 3p index corresponding to matched information
@@ -770,14 +774,14 @@ if __name__ == '__main__':
     output_list.sort(key=operator.itemgetter(0))
     # result_mature.txt generation
     for i in output_list:
-        output_mature.write(str(("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\n")))
+        output_mature.write(str(("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\tMature_len\tMature_prime\n")))
         for j in i:
             for k in j:
                 output_mature.write(str(k))
         output_mature.write("\n")
 
     # result_tabular.txt generation
-    output_tabular.write("ID\treads\tRPM\tChromosome\tStart\tEnd\tStrand\tSeq\n")
+    output_tabular.write("ID\treads\tRead_Count\tChromosome\tStart\tEnd\tStrand\tSeq\n")
     for i in output_list:
         info = i[0][0].split()
         ID = str(info[0])
