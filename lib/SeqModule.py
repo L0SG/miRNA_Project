@@ -392,6 +392,8 @@ def generate_alignment_form(line_info, line_seq, line_db, map_data, MIN_READ_COU
         aligned_list[i][2] = int(aligned_list[i][2])
     aligned_list.sort(key=operator.itemgetter(2), reverse=True)
     seq_rep = aligned_list[0][0].strip('-')
+    name_rep = aligned_list[0][1]
+    count_rep = aligned_list[0][2]
     idx_start = aligned_list[0][0].index(seq_rep)
     idx_end = idx_start + len(seq_rep)
     output_info = output_form[0].split()
@@ -401,6 +403,8 @@ def generate_alignment_form(line_info, line_seq, line_db, map_data, MIN_READ_COU
     elif output_info[5] == '-':
         mature_end = int(output_info[10]) - idx_start
         mature_start = mature_end - len(seq_rep)
+    output_info[0] = name_rep
+    output_info[1] = str(count_rep)
     output_info[3] = str(mature_start)
     output_info[4] = str(mature_end)
     output_info[6] = seq_rep

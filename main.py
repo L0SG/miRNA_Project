@@ -773,15 +773,23 @@ if __name__ == '__main__':
     # sort output_list to display conserved miRNAs first
     output_list.sort(key=operator.itemgetter(0))
     # result_mature.txt generation
-    for i in output_list:
-        output_mature.write(str(("Name\tRead_Count\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\tMature_len\tMature_prime\n")))
-        for j in i:
-            for k in j:
-                output_mature.write(str(k))
-        output_mature.write("\n")
 
+    output_tabular.write(str(("Name\tRead_Count\tRPM\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\tMature_len\tMature_prime\n")))
+    for i in output_list:
+        output_mature.write(str(("Name\tRead_Count\tRPM\tChr_Name\tMature_Start\tMature_End\tPos\tSeq\tMFE\tNorm_MFE\tPrec_Start\tPrec_End\tMature_len\tMature_prime\n")))
+        for j in i:
+            info = j[0].split()
+            RPM = str(format(float(info[1]) / float(reads_total) * 1000000, '.2f'))
+            info_new = info[0:2]+[RPM]+info[2:]
+            info_new = '\t'.join(info_new)+'\n'
+            output_mature.write(info_new)
+            output_tabular.write(info_new)
+            for k in xrange(1, len(j)):
+                output_mature.write(j[k])
+        output_mature.write("\n")
+    """
     # result_tabular.txt generation
-    output_tabular.write("ID\treads\tRead_Count\tChromosome\tStart\tEnd\tStrand\tSeq\n")
+    output_tabular.write("ID\treads\tRead_Count\tRPM\Chromosome\tStart\tEnd\tStrand\tSeq\n")
     for i in output_list:
         info = i[0][0].split()
         ID = str(info[0])
@@ -794,7 +802,7 @@ if __name__ == '__main__':
         seq = str(info[6])
         output_tabular.write(ID+'\t'+reads+'\t'+RPM+'\t'+chromosome+
                              '\t'+seq_start+'\t'+seq_end+'\t'+strand+'\t'+seq+'\n')
-
+    """
     # result_distribution.txt generation
     length_list = length_distribution.items()
     length_list.sort(key=lambda tup: tup[0])
