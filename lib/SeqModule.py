@@ -90,13 +90,13 @@ def check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, arm_leng
     seq_seq = line_info.split()[6]
     command = blastn_path
     mirbase = mirbase_path
-    command = command + ' -task blastn -db "' + mirbase + '" -outfmt 6 -strand plus -num_alignments 10 -ungapped -evalue 0.01'
+    command = command + ' -task blastn -db "' + mirbase + '" -outfmt 6 -strand plus -num_alignments 10 -word_size 4 -reward 5 -penalty -4 -ungapped -evalue 0.1'
     blastn = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output, err = blastn.communicate(seq_seq)
     output = [x.split('\t') for x in output.split('\n')][:-1]
     # if many same matches are detected, annotate it with the matched information
     # get top matches
-    top_num = 3
+    top_num = 1
     output_top_check = map(itemgetter(0), output)
     if len(output_top_check) < top_num:
         return line_info, updated_flag
@@ -123,12 +123,19 @@ def check_conserved_seq(line_info, line_seq, blastn_path, mirbase_path, arm_leng
     line_split = line_info.split()
     prec_match_start = line_seq.find(seq_seq)
     prec_match_end = prec_match_start + len(seq_seq)
-
     switch_start = output_target_start[0]-output_query_start[0]
     switch_end = output_target_end[0]-output_query_end[0]
-    mature_start_updated = int(line_split[3]) + switch_start
-    mature_end_updated = int(line_split[4]) + switch_end
-    mature_seq_updated = line_seq[prec_match_start+switch_start:prec_match_end+switch_end]
+    if switch_start != 0 or switch_end != 0:
+        if switch_start != switch_end:
+            print "minor warning : switch_start and switch_end are not same"
+            pass
+    if line_split[5] == "+":
+        mature_start_updated = int(line_split[3]) - switch_start
+        mature_end_updated = int(line_split[4]) - switch_end
+    elif line_split[5] == "-":
+        mature_start_updated = int(line_split[3]) + switch_start
+        mature_end_updated = int(line_split[4]) + switch_end
+    mature_seq_updated = line_seq[prec_match_start-switch_start:prec_match_end-switch_end]
     # index handling (for RARE case of extremely short arm length specified by user)
     if int(line_split[9]) <= mature_start_updated and int(line_split[10]) >= mature_end_updated:
         line_split[0] = 'xxx-miR'+output_name[0] # heuristic implementation, need to be improved later
@@ -206,17 +213,31 @@ def score_seq(target_5p, target_3p):
     return max_serial_mismatch, max_mult_mismatch, max_serial_bulge, max_mult_bulge
 
 
-def check_no_read_prec(line_info, map_data, MIN_READ_COUNT_THRESHOLD):
+def check_no_read_prec(line_info, line_seq, map_data, MIN_READ_COUNT_THRESHOLD):
     count = 0
     if line_info.split()[5] == "+":
         for i in range(0, len(map_data)):
             if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3]) \
                     and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                # filter out reverse complement case
+                space_left = int(map_data[i][3]) - int(line_info.split()[9])
+                space_right = int(line_info.split()[10]) - int(map_data[i][4])
+                seq_align = map_data[i][6]
+                seq_ref = line_seq[space_left:space_left + len(seq_align)]
+                if seq_align != seq_ref:
+                    continue
                 count += 1
     elif line_info.split()[5] == "-":
         for i in range(0, len(map_data)):
             if line_info.split()[2] == map_data[i][2] and int(line_info.split()[9]) <= int(map_data[i][3]) \
                     and int(line_info.split()[10]) >= int(map_data[i][4]) and MIN_READ_COUNT_THRESHOLD <= int(map_data[i][1]):
+                # filter out reverse complement case
+                space_left = int(line_info.split()[10]) - int(map_data[i][4])
+                space_right = int(map_data[i][3]) - int(line_info.split()[9])
+                seq_align = map_data[i][6]
+                seq_ref = line_seq[space_left:space_left + len(seq_align)]
+                if seq_align != seq_ref:
+                    continue
                 count += 1
     if count == 0:
         return True
@@ -386,6 +407,7 @@ def generate_alignment_form(line_info, line_seq, line_db, map_data, MIN_READ_COU
                 output_form.append(str(('-' * space_left + str(map_data[i][6]) +
                                         '-' * space_right + '\t' +
                                         str(map_data[i][0]) + '\t' + str(map_data[i][1]) + '\n')))
+
     aligned_list = output_form[3:]
     for i in xrange(0, len(aligned_list)):
         aligned_list[i] = aligned_list[i].split()
