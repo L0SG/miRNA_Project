@@ -91,8 +91,8 @@ if os.path.exists(os.path.join(path, "map")):
     output_count_neg = open(os.path.join(path, "count_neg"), "rb")
     ref_count_dump_pos = cPickle.load(output_count_pos)
     ref_count_dump_neg = cPickle.load(output_count_neg)
-output_precursor = open(os.path.join(path, "result_precursor.txt"), "r")
-output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "r")
+output_precursor = open(os.path.join(path, "result_precursor.txt"), "w+")
+output_precursor_collapsed = open(os.path.join(path, "result_precursor_collapsed.txt"), "w+")
 output_mature = open(os.path.join(path, "result_mature.txt"), "w+")
 output_distribution = open(os.path.join(path, "result_length_distribution.txt"), "w+")
 output_tabular = open(os.path.join(path, "result_tabular_format.txt"), "w+")
@@ -240,7 +240,7 @@ for i in range(0, len(ref_seq_list)):
     ref_count_list_pos.append(count_list(ref_count_dump_pos[i]))
     ref_count_list_neg.append(count_list(ref_count_dump_neg[i]))
 
-"""
+
 # use RNAfold to calculate MFE and select putative precursor
 print("\n########## pre-miRNA discovery started ##########")
 print("Calculating MFE of putative precursors with RNAfold...")
@@ -531,15 +531,17 @@ while 1:
 output_precursor_collapsed.seek(0, 0)
 print("Collapsing done")
 print("########## pre-miRNA discovery complete ##########")
-"""
+
 
 print("\n########## mature miRNA-miRNA* duplex calculation started ##########")
 # reads_total is calculated before, but for debugging purpose calculate again at this point
 reads_total = 0
+smrna_file.seek(0, 0)
 for i, l in enumerate(smrna_file):
     if l.startswith('>'):
         reads_total += int(l.split()[1])
     pass
+smrna_file.seek(0, 0)
 if not args.mincount:
     print("min. readcount threshold parameter (-c --mincount) not set, starting automatic read suppression...")
     print("checking smrna file size...")
