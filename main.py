@@ -165,7 +165,7 @@ print("Loading reference genome file to memory...")
 ref_name_list, ref_seq_list = FileIOModule.create_ref_seq(ref_file)
 
 # check whether index file was generated before
-if os.path.exists(os.path.join(os.getcwd(), str(ref_file.name)+".1.ebwt")):
+if os.path.exists(os.path.join(os.getcwd(), str(ref_file.name)+".1.ebwtl")):
     print("Index file detected, skipping index generation...")
 else:
     # generate map file using bowtie
@@ -179,7 +179,8 @@ else:
     print("Generating index file with bowtie_build...")
     bowtie_build = subprocess.Popen([bowtie_build_path,
                                ref_file_path,
-                               os.path.join(os.getcwd(), str(ref_file.name))],
+                               os.path.join(os.getcwd(), str(ref_file.name)),
+                                     '--large-index'],
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     bowtie_build.wait()
 
@@ -200,7 +201,8 @@ else:
     bowtie = subprocess.Popen([bowtie_path, str(ref_file.name),
                                "-f", smrna_file_path,
                                os.path.join(path, "map_bowtie"),
-                               "-v", "0", "-m", str(MAX_MULTIPLE_LOCI), "-a", "-t", "-p", str(NUM_THREADS)],
+                               "-v", "0", "-m", str(MAX_MULTIPLE_LOCI), "-a", "-t", "-p", str(NUM_THREADS),
+                               '--large-index'],
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     bowtie.wait()
 
